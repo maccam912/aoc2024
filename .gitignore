@@ -1,0 +1,16 @@
+/target
+
+# Rust build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Real puzzle inputs
+inputs/real/
+inputs/real/**/*.txt
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*~
