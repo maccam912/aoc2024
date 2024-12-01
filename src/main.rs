@@ -15,7 +15,7 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    
+
     match args.day {
         Some(day) => {
             aoc2024::run_solution(day, args.sample);

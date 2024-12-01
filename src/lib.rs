@@ -71,15 +71,18 @@ pub fn get_solution(day: u8) -> Option<Box<dyn Solution>> {
 pub fn run_solution(day: u8, is_sample: bool) {
     if let Some(solution) = get_solution(day) {
         println!("\nDay {}", day);
-        println!("Running against {} input", if is_sample { "sample" } else { "real" });
-        
+        println!(
+            "Running against {} input",
+            if is_sample { "sample" } else { "real" }
+        );
+
         let input = read_input(day, is_sample);
-        
+
         let start = Instant::now();
         let p1 = solution.part1(&input);
         let p1_time = start.elapsed();
         println!("Part 1: {} ({:?})", p1, p1_time);
-        
+
         let start = Instant::now();
         let p2 = solution.part2(&input);
         let p2_time = start.elapsed();

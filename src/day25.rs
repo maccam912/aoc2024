@@ -24,22 +24,9 @@ mod tests {
         let input = read_input(25, true);
         assert_eq!(Day25.part1(&input), "Not implemented");
     }
-
-    #[test]
-    fn test_part1_real() {
-        let input = read_input(25, false);
-        assert_eq!(Day25.part1(&input), "Not implemented");
-    }
-
     #[test]
     fn test_part2_sample() {
         let input = read_input(25, true);
-        assert_eq!(Day25.part2(&input), "Not implemented");
-    }
-
-    #[test]
-    fn test_part2_real() {
-        let input = read_input(25, false);
         assert_eq!(Day25.part2(&input), "Not implemented");
     }
 }
