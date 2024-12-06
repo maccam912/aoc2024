@@ -1,9 +1,9 @@
-use std::collections::{HashMap, HashSet};
 use crate::Solution;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 struct PrintRules {
-    rules: Vec<(u32, u32)>,  // (before, after) pairs
+    rules: Vec<(u32, u32)>, // (before, after) pairs
     updates: Vec<Vec<u32>>,
 }
 
@@ -21,7 +21,7 @@ impl PrintRules {
 
     fn parse(input: &str) -> Self {
         let (rules_str, updates_str) = Self::split_input(input);
-        
+
         let rules: Vec<(u32, u32)> = rules_str
             .lines()
             .filter(|line| !line.trim().is_empty())
@@ -37,7 +37,8 @@ impl PrintRules {
             .lines()
             .filter(|line| !line.trim().is_empty())
             .map(|line| {
-                line.trim().split(',')
+                line.trim()
+                    .split(',')
                     .map(|n| n.trim().parse().unwrap())
                     .collect()
             })
@@ -49,12 +50,16 @@ impl PrintRules {
     fn is_valid_order(&self, update: &[u32]) -> bool {
         // For each pair of numbers in the update
         for i in 0..update.len() {
-            for j in i+1..update.len() {
+            for j in i + 1..update.len() {
                 let a = update[i];
                 let b = update[j];
-                
+
                 // Check if there's a rule saying b should come before a
-                if self.rules.iter().any(|&(before, after)| before == b && after == a) {
+                if self
+                    .rules
+                    .iter()
+                    .any(|&(before, after)| before == b && after == a)
+                {
                     return false;
                 }
             }
@@ -72,11 +77,15 @@ impl PrintRules {
         while changed {
             changed = false;
             for i in 0..sorted.len() {
-                for j in i+1..sorted.len() {
+                for j in i + 1..sorted.len() {
                     let a = sorted[i];
                     let b = sorted[j];
                     // If there's a rule saying b should come before a, swap them
-                    if self.rules.iter().any(|&(before, after)| before == b && after == a) {
+                    if self
+                        .rules
+                        .iter()
+                        .any(|&(before, after)| before == b && after == a)
+                    {
                         sorted.swap(i, j);
                         changed = true;
                     }
@@ -100,25 +109,28 @@ pub struct Day05;
 impl Solution for Day05 {
     fn part1(&self, input: &str) -> String {
         let rules = PrintRules::parse(input);
-        
-        let sum: u32 = rules.updates.iter()
+
+        let sum: u32 = rules
+            .updates
+            .iter()
             .filter(|update| rules.is_valid_order(update))
             .map(|update| rules.get_middle_number(update))
             .sum();
-            
+
         sum.to_string()
     }
 
     fn part2(&self, input: &str) -> String {
         let rules = PrintRules::parse(input);
-        
+
         // First find all initially invalid updates
-        let invalid_updates: Vec<Vec<u32>> = rules.updates
+        let invalid_updates: Vec<Vec<u32>> = rules
+            .updates
             .iter()
             .filter(|update| !rules.is_valid_order(update))
             .cloned()
             .collect();
-        
+
         // Now process only those invalid updates
         let sum: u32 = invalid_updates
             .iter()
@@ -127,7 +139,7 @@ impl Solution for Day05 {
                 rules.get_middle_number(&sorted)
             })
             .sum();
-        
+
         sum.to_string()
     }
 }
