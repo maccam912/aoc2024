@@ -1,5 +1,4 @@
 use crate::Solution;
-use std::fs;
 
 pub struct Day03;
 

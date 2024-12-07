@@ -1,4 +1,3 @@
-use aoc2024::*;
 use clap::Parser;
 
 #[derive(Parser)]

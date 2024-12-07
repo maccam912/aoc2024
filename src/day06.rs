@@ -49,7 +49,7 @@ impl Day06 {
     }
 
     fn simulate_guard(&self, input: &str) -> usize {
-        let (mut map, (start_row, start_col, start_dir)) = Self::parse_map(input);
+        let (map, (start_row, start_col, start_dir)) = Self::parse_map(input);
         let rows = map.len() as i32;
         let cols = map[0].len() as i32;
         let mut visited = HashSet::new();

@@ -1,5 +1,4 @@
 use crate::Solution;
-use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 struct PrintRules {
