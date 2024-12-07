@@ -136,6 +136,7 @@ fn parse_mul_args(args: &str) -> Option<(i32, i32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn test_part1_sample() {
