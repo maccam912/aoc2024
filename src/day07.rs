@@ -74,32 +74,6 @@ fn can_make_value_part2(numbers: &[i64], target: i64) -> bool {
     try_combinations(numbers, &mut vec![], &operators, target)
 }
 
-fn evaluate_expression(numbers: &[i64], operators: &[char]) -> i64 {
-    let mut result = numbers[0];
-    let mut i = 0;
-    while i < operators.len() {
-        if operators[i] == 'c' {
-            // Handle concatenation
-            let mut j = i;
-            let mut concat_str = result.to_string();
-            while j < operators.len() && operators[j] == 'c' {
-                concat_str.push_str(&numbers[j + 1].to_string());
-                j += 1;
-            }
-            result = concat_str.parse().unwrap();
-            i = j;
-        } else {
-            match operators[i] {
-                '+' => result += numbers[i + 1],
-                '*' => result *= numbers[i + 1],
-                _ => unreachable!(),
-            }
-            i += 1;
-        }
-    }
-    result
-}
-
 fn try_combinations(
     numbers: &[i64],
     current_ops: &mut Vec<char>,
@@ -141,7 +115,6 @@ fn try_combinations(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::read_input;
 
     #[test]
     fn test_part1_sample() {

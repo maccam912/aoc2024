@@ -39,44 +39,6 @@ fn check_word_at_position(
     true
 }
 
-fn check_mas_at_position(
-    grid: &[Vec<char>],
-    row: i32,
-    col: i32,
-    row_delta: i32,
-    col_delta: i32,
-) -> bool {
-    let rows = grid.len() as i32;
-    let cols = grid[0].len() as i32;
-    let word = ['M', 'A', 'S'];
-
-    // Check if any position would be out of bounds
-    for i in 0..3 {
-        let new_row = row + i * row_delta;
-        let new_col = col + i * col_delta;
-
-        if new_row < 0 || new_row >= rows || new_col < 0 || new_col >= cols {
-            return false;
-        }
-    }
-
-    // Check forward MAS
-    let forward = (0..3).all(|i| {
-        let i = i as usize;
-        grid[(row + i as i32 * row_delta) as usize][(col + i as i32 * col_delta) as usize]
-            == word[i]
-    });
-
-    // Check backward SAM
-    let backward = (0..3).all(|i| {
-        let i = i as usize;
-        grid[(row + i as i32 * row_delta) as usize][(col + i as i32 * col_delta) as usize]
-            == word[2 - i]
-    });
-
-    forward || backward
-}
-
 fn check_x_mas_at_position(grid: &[Vec<char>], row: usize, col: usize) -> bool {
     // First check if center is 'A'
     if grid[row][col] != 'A' {

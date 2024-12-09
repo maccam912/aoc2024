@@ -86,7 +86,6 @@ fn is_valid_sequence(numbers: &[i32]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::read_input;
 
     #[test]
     fn test_part1_sample() {

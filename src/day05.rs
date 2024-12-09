@@ -93,14 +93,6 @@ impl PrintRules {
         }
         sorted
     }
-
-    fn get_invalid_updates(&self) -> Vec<Vec<u32>> {
-        self.updates
-            .iter()
-            .filter(|update| !self.is_valid_order(update))
-            .cloned()
-            .collect()
-    }
 }
 
 pub struct Day05;
