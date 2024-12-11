@@ -80,7 +80,7 @@ impl Day06 {
 
     fn simulate_with_obstruction(
         &self,
-        map: &mut Vec<Vec<char>>,
+        map: &[Vec<char>],
         start: (usize, usize, Direction),
     ) -> bool {
         let rows = map.len() as i32;
@@ -118,7 +118,7 @@ impl Day06 {
     }
 
     fn find_loop_positions(&self, input: &str) -> usize {
-        let (mut map, start) = Self::parse_map(input);
+        let (map, start) = Self::parse_map(input);
         let mut count = 0;
 
         // Try placing an obstruction at each empty position
@@ -126,15 +126,13 @@ impl Day06 {
             for j in 0..map[0].len() {
                 if map[i][j] == '.' && (i != start.0 || j != start.1) {
                     // Place obstruction
-                    map[i][j] = '#';
+                    let mut map_clone = map.clone();
+                    map_clone[i][j] = '#';
 
                     // Simulate guard movement
-                    if self.simulate_with_obstruction(&mut map, start) {
+                    if self.simulate_with_obstruction(&map_clone, start) {
                         count += 1;
                     }
-
-                    // Remove obstruction
-                    map[i][j] = '.';
                 }
             }
         }

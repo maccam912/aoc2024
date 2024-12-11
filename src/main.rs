@@ -22,7 +22,7 @@ fn main() {
         None => {
             // Run all implemented solutions
             for day in 1..=25 {
-                if let Some(_) = aoc2024::get_solution(day) {
+                if aoc2024::get_solution(day).is_some() {
                     aoc2024::run_solution(day, args.sample);
                 }
             }

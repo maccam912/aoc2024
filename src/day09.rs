@@ -2,7 +2,6 @@ use crate::Solution;
 
 #[derive(Debug, Clone)]
 struct File {
-    id: usize,
     blocks: Vec<usize>, // Positions of blocks belonging to this file
 }
 
@@ -32,10 +31,7 @@ impl DiskMap {
                     blocks.push(pos);
                     disk.push(Some(file_id));
                 }
-                files.push(File {
-                    id: file_id,
-                    blocks,
-                });
+                files.push(File { blocks });
                 file_id += 1;
             } else {
                 // Free space

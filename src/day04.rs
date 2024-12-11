@@ -24,8 +24,8 @@ fn check_word_at_position(
     let word = ['X', 'M', 'A', 'S'];
 
     for i in 0..4 {
-        let new_row = row as i32 + i as i32 * row_delta;
-        let new_col = col as i32 + i as i32 * col_delta;
+        let new_row = row as i32 + i * row_delta;
+        let new_col = col as i32 + i * col_delta;
 
         if new_row < 0 || new_row >= rows || new_col < 0 || new_col >= cols {
             return false;
@@ -72,11 +72,7 @@ fn check_x_mas_at_position(grid: &[Vec<char>], row: usize, col: usize) -> bool {
         .count();
 
     // For a valid pattern, each diagonal must have exactly one M and one S
-    if diag1_m_count == 1 && diag1_s_count == 1 && diag2_m_count == 1 && diag2_s_count == 1 {
-        true
-    } else {
-        false
-    }
+    diag1_m_count == 1 && diag1_s_count == 1 && diag2_m_count == 1 && diag2_s_count == 1
 }
 
 fn process_part1(input: &str) -> String {
