@@ -1,54 +1,47 @@
 use crate::Solution;
-
-#[derive(Debug, Clone)]
-struct Stone {
-    number: u64,
-}
-
-impl Stone {
-    fn blink(&self) -> Vec<Stone> {
-        // Rule 1: If stone is 0, replace with 1
-        if self.number == 0 {
-            return vec![Stone { number: 1 }];
-        }
-
-        // Rule 2: If number has even number of digits, split into two stones
-        let digit_count = self.number.to_string().len();
-        if digit_count % 2 == 0 {
-            let num_str = self.number.to_string();
-            let mid = digit_count / 2;
-            let left = num_str[..mid].parse::<u64>().unwrap();
-            let right = num_str[mid..].parse::<u64>().unwrap();
-            return vec![Stone { number: left }, Stone { number: right }];
-        }
-
-        // Rule 3: Multiply by 2024
-        vec![Stone {
-            number: self.number * 2024,
-        }]
-    }
-}
+use std::collections::HashMap;
 
 pub struct Day11;
 
 impl Day11 {
     fn solve(&self, input: &str, blinks: usize) -> String {
-        let mut stones: Vec<Stone> = input
-            .split_whitespace()
-            .map(|s| Stone {
-                number: s.parse().unwrap(),
-            })
-            .collect();
+        // Initialize the frequency map from input
+        let mut freq_map: HashMap<u64, u64> = HashMap::new();
+        for num in input.split_whitespace() {
+            let n = num.parse().unwrap();
+            *freq_map.entry(n).or_insert(0) += 1;
+        }
 
         // Simulate blinks
         for _ in 0..blinks {
-            stones = stones
-                .into_iter()
-                .flat_map(|stone| stone.blink())
-                .collect();
+            let mut new_map: HashMap<u64, u64> = HashMap::new();
+
+            for (num, count) in freq_map.iter() {
+                if *num == 0 {
+                    // Rule 1: 0 becomes 1
+                    *new_map.entry(1).or_insert(0) += count;
+                    continue;
+                }
+
+                // Rule 2: Check if number has even number of digits
+                let num_str = num.to_string();
+                let digit_count = num_str.len();
+                if digit_count % 2 == 0 {
+                    let mid = digit_count / 2;
+                    let left = num_str[..mid].parse::<u64>().unwrap();
+                    let right = num_str[mid..].parse::<u64>().unwrap();
+                    *new_map.entry(left).or_insert(0) += count;
+                    *new_map.entry(right).or_insert(0) += count;
+                } else {
+                    // Rule 3: Multiply by 2024
+                    *new_map.entry(num * 2024).or_insert(0) += count;
+                }
+            }
+            freq_map = new_map;
         }
 
-        stones.len().to_string()
+        // Sum all frequencies to get total count
+        freq_map.values().sum::<u64>().to_string()
     }
 }
 
