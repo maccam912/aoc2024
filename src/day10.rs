@@ -146,7 +146,6 @@ impl Solution for Day10 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::read_input;
 
     #[test]
     fn test_part1_sample() {

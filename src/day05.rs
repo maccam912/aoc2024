@@ -142,13 +142,13 @@ mod tests {
 
     #[test]
     fn test_part1_sample() {
-        let input = read_input(05, true);
+        let input = read_input(5, true);
         assert_eq!(Day05.part1(&input), "143");
     }
 
     #[test]
     fn test_part2_sample() {
-        let input = read_input(05, true);
+        let input = read_input(5, true);
         assert_eq!(Day05.part2(&input), "123");
     }
 }
