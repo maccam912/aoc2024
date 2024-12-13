@@ -70,6 +70,59 @@ impl Day12 {
         perimeter
     }
 
+    fn count_holes(&self, region: &HashSet<(usize, usize)>) -> usize {
+        // Find bounds of the region
+        let min_r = region.iter().map(|&(r, _)| r).min().unwrap();
+        let max_r = region.iter().map(|&(r, _)| r).max().unwrap();
+        let min_c = region.iter().map(|&(_, c)| c).min().unwrap();
+        let max_c = region.iter().map(|&(_, c)| c).max().unwrap();
+
+        let mut holes = 0;
+        let mut visited = HashSet::new();
+
+        // For each empty space
+        for r in min_r..=max_r {
+            for c in min_c..=max_c {
+                if region.contains(&(r, c)) || visited.contains(&(r, c)) {
+                    continue;
+                }
+
+                // Do a flood fill to see if this empty space is completely surrounded
+                let mut is_hole = true;
+                let mut empty_cells = HashSet::new();
+                let mut queue = vec![(r, c)];
+                visited.insert((r, c));
+                empty_cells.insert((r, c));
+
+                while let Some((cr, cc)) = queue.pop() {
+                    for (dr, dc) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
+                        let nr = (cr as i32 + dr) as usize;
+                        let nc = (cc as i32 + dc) as usize;
+                        
+                        // If we hit the boundary, this isn't a hole
+                        if nr < min_r || nr > max_r || nc < min_c || nc > max_c {
+                            is_hole = false;
+                            continue;
+                        }
+
+                        // If it's an empty cell we haven't visited, add it to the queue
+                        if !region.contains(&(nr, nc)) && !visited.contains(&(nr, nc)) {
+                            queue.push((nr, nc));
+                            visited.insert((nr, nc));
+                            empty_cells.insert((nr, nc));
+                        }
+                    }
+                }
+
+                if is_hole {
+                    holes += 1;
+                }
+            }
+        }
+
+        holes
+    }
+
     fn calculate_sides(&self, region: &HashSet<(usize, usize)>) -> usize {
         if region.len() == 1 {
             return 4; // Single cell always has 4 sides
@@ -101,8 +154,11 @@ impl Day12 {
             }
         }
 
-        // Base 4 sides plus 2 for each inside corner
-        4 + (inside_corners * 2)
+        // Count holes and subtract 2 for each one
+        let holes = self.count_holes(region);
+        
+        // Base 4 sides plus 2 for each inside corner, minus 2 for each hole
+        4 + (inside_corners * 2) - (holes * 2)
     }
 
     fn visualize_region(&self, region: &HashSet<(usize, usize)>, plant_type: char) {
@@ -148,9 +204,26 @@ impl Day12 {
                         }
                     }
 
-                    // If exactly 3 cells are in the region and this cell is one of them,
-                    // it's part of an inside corner
-                    if count == 3 && region.contains(&(r, c)) {
+                    // Check if we're looking at a hole by checking surrounding cells
+                    let mut surrounding_count = 0;
+                    for dr2 in -1..=2 {
+                        for dc2 in -1..=2 {
+                            if (r2 as i32 + dr2) >= 0 && (c2 as i32 + dc2) >= 0 {
+                                let check_r = (r2 as i32 + dr2) as usize;
+                                let check_c = (c2 as i32 + dc2) as usize;
+                                if region.contains(&(check_r, check_c)) {
+                                    surrounding_count += 1;
+                                }
+                            }
+                        }
+                    }
+                    
+                    let is_hole = surrounding_count > 10;
+
+                    // For normal edges: 3 cells = inside corner
+                    // For holes: 1 cell = inside corner
+                    if (!is_hole && count == 3 && region.contains(&(r, c))) || 
+                       (is_hole && count == 1 && region.contains(&(r, c))) {
                         is_inside_corner = true;
                         break;
                     }
