@@ -70,6 +70,41 @@ impl Day12 {
         perimeter
     }
 
+    fn calculate_sides(&self, region: &HashSet<(usize, usize)>) -> usize {
+        if region.len() == 1 {
+            return 4; // Single cell always has 4 sides
+        }
+
+        // Find bounds of the region
+        let min_r = region.iter().map(|&(r, _)| r).min().unwrap();
+        let max_r = region.iter().map(|&(r, _)| r).max().unwrap();
+        let min_c = region.iter().map(|&(_, c)| c).min().unwrap();
+        let max_c = region.iter().map(|&(_, c)| c).max().unwrap();
+
+        let mut inside_corners = 0;
+
+        // Look at each potential 2x2 region
+        for r in min_r..max_r {
+            for c in min_c..max_c {
+                // Count how many cells in this 2x2 are part of the region
+                let mut count = 0;
+                for (dr, dc) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
+                    if region.contains(&(r + dr, c + dc)) {
+                        count += 1;
+                    }
+                }
+
+                // If exactly 3 cells are in the region, it's an inside corner
+                if count == 3 {
+                    inside_corners += 1;
+                }
+            }
+        }
+
+        // Base 4 sides plus 2 for each inside corner
+        4 + (inside_corners * 2)
+    }
+
     fn visualize_region(&self, region: &HashSet<(usize, usize)>, plant_type: char) {
         if region.is_empty() {
             return;
@@ -81,16 +116,50 @@ impl Day12 {
         let min_c = region.iter().map(|&(_, c)| c).min().unwrap();
         let max_c = region.iter().map(|&(_, c)| c).max().unwrap();
 
-        println!("\nRegion of type '{}' (size: {}, perimeter: {}):", 
-            plant_type, region.len(), self.calculate_perimeter(region));
+        let sides = self.calculate_sides(region);
+        let inside_corners = (sides - 4) / 2; // Reverse calculate the number of inside corners
+
+        println!("\nRegion of type '{}' (size: {}, perimeter: {}, sides: {}, inside corners: {})", 
+            plant_type, region.len(), self.calculate_perimeter(region), sides, inside_corners);
         
-        // Draw the region
+        // Draw the region with corner markers
         for r in min_r..=max_r {
             for c in min_c..=max_c {
-                if region.contains(&(r, c)) {
-                    print!("{}", plant_type);
-                } else {
+                if !region.contains(&(r, c)) {
                     print!(".");
+                    continue;
+                }
+
+                // Check if this position is part of a 2x2 that forms an inside corner
+                let mut is_inside_corner = false;
+                for (dr, dc) in [(0, 0), (-1, -1), (-1, 0), (0, -1)] {
+                    // Skip if we'd go out of bounds
+                    if (r as i32 + dr) < 0 || (c as i32 + dc) < 0 {
+                        continue;
+                    }
+                    let r2 = (r as i32 + dr) as usize;
+                    let c2 = (c as i32 + dc) as usize;
+                    
+                    // Count cells in this 2x2
+                    let mut count = 0;
+                    for (dr2, dc2) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
+                        if region.contains(&(r2 + dr2, c2 + dc2)) {
+                            count += 1;
+                        }
+                    }
+
+                    // If exactly 3 cells are in the region and this cell is one of them,
+                    // it's part of an inside corner
+                    if count == 3 && region.contains(&(r, c)) {
+                        is_inside_corner = true;
+                        break;
+                    }
+                }
+
+                if is_inside_corner {
+                    print!("I");
+                } else {
+                    print!("{}", plant_type);
                 }
             }
             println!();
@@ -126,8 +195,31 @@ impl Solution for Day12 {
         total_price.to_string()
     }
 
-    fn part2(&self, _input: &str) -> String {
-        "Not implemented".to_string()
+    fn part2(&self, input: &str) -> String {
+        // Parse input into grid
+        let grid: Vec<Vec<char>> = input.lines()
+            .map(|line| line.chars().collect())
+            .collect();
+
+        // Find all regions
+        let regions = self.find_regions(&grid);
+
+        // Debug: Visualize each region
+        println!("\nPart 2 Regions:");
+        for (plant_type, region) in regions.iter() {
+            self.visualize_region(region, *plant_type);
+        }
+
+        // Calculate total price using sides instead of perimeter
+        let total_price: usize = regions.iter()
+            .map(|(_, region)| {
+                let area = region.len();
+                let sides = self.calculate_sides(region);
+                area * sides
+            })
+            .sum();
+
+        total_price.to_string()
     }
 }
 
@@ -170,5 +262,38 @@ MIIIIIJJEE
 MIIISIJEEE
 MMMISSJEEE";
         assert_eq!(Day12.part1(input), "1930");
+    }
+
+    #[test]
+    fn test_part2_sample() {
+        let input = "\
+AAAA
+BBCD
+BBCC
+EEEC";
+        assert_eq!(Day12.part2(input), "80");
+    }
+
+    #[test]
+    fn test_part2_sample2() {
+        let input = "\
+EEEEE
+EXXXX
+EEEEE
+EXXXX
+EEEEE";
+        assert_eq!(Day12.part2(input), "236");
+    }
+
+    #[test]
+    fn test_part2_sample3() {
+        let input = "\
+AAAAAA
+AAABBA
+AAABBA
+ABBAAA
+ABBAAA
+AAAAAA";
+        assert_eq!(Day12.part2(input), "368");
     }
 }
