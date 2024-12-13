@@ -1,6 +1,8 @@
 use crate::Solution;
 use std::collections::{HashSet, VecDeque};
 
+static DEBUG: bool = false;
+
 pub struct Day12;
 
 impl Day12 {
@@ -50,6 +52,10 @@ impl Day12 {
             for c in 0..cols {
                 if !visited.contains(&(r, c)) {
                     let region = bfs(grid, (r, c), &mut visited);
+                    if DEBUG {
+                        println!("\nFound region of type '{}' at ({}, {})", grid[r][c], r, c);
+                        println!("Region coordinates: {:?}", region);
+                    }
                     regions.push((grid[r][c], region));
                 }
             }
@@ -71,65 +77,164 @@ impl Day12 {
                 }
             }
         }
+        if DEBUG {
+            println!("Region perimeter: {}", perimeter);
+        }
         perimeter
     }
 
     fn count_holes(&self, region: &HashSet<(usize, usize)>) -> usize {
+        if region.is_empty() {
+            return 0;
+        }
+
         // Find bounds of the region
         let min_r = region.iter().map(|&(r, _)| r).min().unwrap();
         let max_r = region.iter().map(|&(r, _)| r).max().unwrap();
         let min_c = region.iter().map(|&(_, c)| c).min().unwrap();
         let max_c = region.iter().map(|&(_, c)| c).max().unwrap();
 
-        let mut holes = 0;
-        let mut visited = HashSet::new();
-
-        // For each empty space
-        for r in min_r..=max_r {
-            for c in min_c..=max_c {
-                if region.contains(&(r, c)) || visited.contains(&(r, c)) {
-                    continue;
+        if DEBUG {
+            println!("\nChecking for holes in region:");
+            for r in min_r..=max_r {
+                for c in min_c..=max_c {
+                    print!("{}", if region.contains(&(r, c)) { "█" } else { "." });
                 }
+                println!();
+            }
+        }
 
-                // Do a flood fill to see if this empty space is completely surrounded
-                let mut is_hole = true;
-                let mut empty_cells = HashSet::new();
-                let mut queue = vec![(r, c)];
-                visited.insert((r, c));
-                empty_cells.insert((r, c));
+        // Create a set of all empty spaces
+        let empty_spaces: HashSet<(usize, usize)> = (min_r..=max_r)
+            .flat_map(|r| (min_c..=max_c).map(move |c| (r, c)))
+            .filter(|pos| !region.contains(pos))
+            .collect();
 
-                while let Some((cr, cc)) = queue.pop() {
-                    for (dr, dc) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
-                        let nr = (cr as i32 + dr) as usize;
-                        let nc = (cc as i32 + dc) as usize;
+        // Start flood fill from the edges
+        let mut queue = VecDeque::new();
 
-                        // If we hit the boundary, this isn't a hole
-                        if nr < min_r || nr > max_r || nc < min_c || nc > max_c {
-                            is_hole = false;
-                            continue;
-                        }
+        // Add all empty spaces on the edges to the queue
+        for r in min_r..=max_r {
+            if !region.contains(&(r, min_c)) {
+                queue.push_back((r, min_c));
+            }
+            if !region.contains(&(r, max_c)) {
+                queue.push_back((r, max_c));
+            }
+        }
+        for c in min_c..=max_c {
+            if !region.contains(&(min_r, c)) {
+                queue.push_back((min_r, c));
+            }
+            if !region.contains(&(max_r, c)) {
+                queue.push_back((max_r, c));
+            }
+        }
 
-                        // If it's an empty cell we haven't visited, add it to the queue
-                        if !region.contains(&(nr, nc)) && !visited.contains(&(nr, nc)) {
-                            queue.push((nr, nc));
-                            visited.insert((nr, nc));
-                            empty_cells.insert((nr, nc));
+        // Mark all reachable empty spaces
+        let mut reachable = HashSet::new();
+        while let Some((r, c)) = queue.pop_front() {
+            if !reachable.insert((r, c)) {
+                continue;
+            }
+
+            // Check all 8 directions (including diagonals)
+            for dr in -1..=1 {
+                for dc in -1..=1 {
+                    if dr == 0 && dc == 0 {
+                        continue;
+                    }
+
+                    let new_r = r as i32 + dr;
+                    let new_c = c as i32 + dc;
+
+                    if new_r >= min_r as i32
+                        && new_r <= max_r as i32
+                        && new_c >= min_c as i32
+                        && new_c <= max_c as i32
+                    {
+                        let new_pos = (new_r as usize, new_c as usize);
+                        if empty_spaces.contains(&new_pos) && !reachable.contains(&new_pos) {
+                            queue.push_back(new_pos);
                         }
                     }
-                }
-
-                if is_hole {
-                    holes += 1;
                 }
             }
         }
 
-        holes
+        // Get unreachable spaces (potential holes)
+        let unreachable: HashSet<_> = empty_spaces.difference(&reachable).cloned().collect();
+
+        // Count connected groups of unreachable spaces - each group is one hole
+        let mut hole_count = 0;
+        let mut unprocessed = unreachable.clone();
+
+        while !unprocessed.is_empty() {
+            // Start a new hole group
+            let start = *unprocessed.iter().next().unwrap();
+            let mut hole_group = VecDeque::new();
+            hole_group.push_back(start);
+            unprocessed.remove(&start);
+
+            // Flood fill to find all connected spaces in this hole
+            while let Some((r, c)) = hole_group.pop_front() {
+                // Check all 8 directions
+                for dr in -1..=1 {
+                    for dc in -1..=1 {
+                        if dr == 0 && dc == 0 {
+                            continue;
+                        }
+
+                        let new_r = r as i32 + dr;
+                        let new_c = c as i32 + dc;
+
+                        if new_r >= min_r as i32
+                            && new_r <= max_r as i32
+                            && new_c >= min_c as i32
+                            && new_c <= max_c as i32
+                        {
+                            let new_pos = (new_r as usize, new_c as usize);
+                            if unprocessed.contains(&new_pos) {
+                                hole_group.push_back(new_pos);
+                                unprocessed.remove(&new_pos);
+                            }
+                        }
+                    }
+                }
+            }
+
+            hole_count += 1;
+        }
+
+        if DEBUG {
+            println!("Total holes found: {}", hole_count);
+            // Print the region with holes marked
+            let mut hole_groups = vec![vec!['.'; max_c - min_c + 1]; max_r - min_r + 1];
+            for r in min_r..=max_r {
+                for c in min_c..=max_c {
+                    let pos = (r, c);
+                    if region.contains(&pos) {
+                        hole_groups[r - min_r][c - min_c] = '█';
+                    } else if unreachable.contains(&pos) {
+                        hole_groups[r - min_r][c - min_c] = 'O';
+                    }
+                }
+            }
+            for row in hole_groups {
+                println!("{}", row.iter().collect::<String>());
+            }
+        }
+
+        hole_count
     }
 
     fn calculate_sides(&self, region: &HashSet<(usize, usize)>) -> usize {
+        // If this is a single cell region, just return 4 sides
         if region.len() == 1 {
-            return 4; // Single cell always has 4 sides
+            if DEBUG {
+                println!("Single cell region - 4 sides");
+            }
+            return 4;
         }
 
         // Find bounds of the region
@@ -139,6 +244,16 @@ impl Day12 {
         let max_c = region.iter().map(|&(_, c)| c).max().unwrap();
 
         let mut inside_corners = 0;
+
+        if DEBUG {
+            println!("\nChecking for inside corners in region:");
+            for r in min_r..=max_r {
+                for c in min_c..=max_c {
+                    print!("{}", if region.contains(&(r, c)) { "█" } else { "." });
+                }
+                println!();
+            }
+        }
 
         // Look at each potential 2x2 region
         for r in min_r..max_r {
@@ -153,117 +268,56 @@ impl Day12 {
 
                 // If exactly 3 cells are in the region, it's an inside corner
                 if count == 3 {
+                    if DEBUG {
+                        println!("Found inside corner at ({}, {})", r, c);
+                        println!("2x2 region:");
+                        for dr in 0..2 {
+                            for dc in 0..2 {
+                                print!(
+                                    "{}",
+                                    if region.contains(&(r + dr, c + dc)) {
+                                        "O"
+                                    } else {
+                                        "."
+                                    }
+                                );
+                            }
+                            println!();
+                        }
+                        println!();
+                    }
                     inside_corners += 1;
                 }
             }
         }
 
-        // Count holes and subtract 2 for each one
+        // Count holes and subtract 4 for each one
         let holes = self.count_holes(region);
 
-        // Base 4 sides plus 2 for each inside corner, minus 2 for each hole
-        4 + (inside_corners * 2) - (holes * 2)
-    }
+        // Base 4 sides plus 2 for each inside corner, minus 4 for each hole
+        let result = 4 + (inside_corners * 2) - (holes * 4);
 
-    fn visualize_region(&self, region: &HashSet<(usize, usize)>, plant_type: char) {
-        if region.is_empty() {
-            return;
+        if DEBUG {
+            println!("Final calculation:");
+            println!("  Base sides: 4");
+            println!(
+                "  Inside corners: {} (+{})",
+                inside_corners,
+                inside_corners * 2
+            );
+            println!("  Holes: {} (-{})", holes, holes * 4);
+            println!("  Total sides: {}", result);
         }
 
-        // Find bounds of the region
-        let min_r = region.iter().map(|&(r, _)| r).min().unwrap();
-        let max_r = region.iter().map(|&(r, _)| r).max().unwrap();
-        let min_c = region.iter().map(|&(_, c)| c).min().unwrap();
-        let max_c = region.iter().map(|&(_, c)| c).max().unwrap();
-
-        let sides = self.calculate_sides(region);
-        let inside_corners = (sides - 4) / 2; // Reverse calculate the number of inside corners
-
-        println!(
-            "\nRegion of type '{}' (size: {}, perimeter: {}, sides: {}, inside corners: {})",
-            plant_type,
-            region.len(),
-            self.calculate_perimeter(region),
-            sides,
-            inside_corners
-        );
-
-        // Draw the region with corner markers
-        for r in min_r..=max_r {
-            for c in min_c..=max_c {
-                if !region.contains(&(r, c)) {
-                    print!(".");
-                    continue;
-                }
-
-                // Check if this position is part of a 2x2 that forms an inside corner
-                let mut is_inside_corner = false;
-                for (dr, dc) in [(0, 0), (-1, -1), (-1, 0), (0, -1)] {
-                    // Skip if we'd go out of bounds
-                    if (r as i32 + dr) < 0 || (c as i32 + dc) < 0 {
-                        continue;
-                    }
-                    let r2 = (r as i32 + dr) as usize;
-                    let c2 = (c as i32 + dc) as usize;
-
-                    // Count cells in this 2x2
-                    let mut count = 0;
-                    for (dr2, dc2) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
-                        if region.contains(&(r2 + dr2, c2 + dc2)) {
-                            count += 1;
-                        }
-                    }
-
-                    // Check if we're looking at a hole by checking surrounding cells
-                    let mut surrounding_count = 0;
-                    for dr2 in -1..=2 {
-                        for dc2 in -1..=2 {
-                            if (r2 as i32 + dr2) >= 0 && (c2 as i32 + dc2) >= 0 {
-                                let check_r = (r2 as i32 + dr2) as usize;
-                                let check_c = (c2 as i32 + dc2) as usize;
-                                if region.contains(&(check_r, check_c)) {
-                                    surrounding_count += 1;
-                                }
-                            }
-                        }
-                    }
-
-                    let is_hole = surrounding_count > 10;
-
-                    // For normal edges: 3 cells = inside corner
-                    // For holes: 1 cell = inside corner
-                    if (!is_hole && count == 3 && region.contains(&(r, c)))
-                        || (is_hole && count == 1 && region.contains(&(r, c)))
-                    {
-                        is_inside_corner = true;
-                        break;
-                    }
-                }
-
-                if is_inside_corner {
-                    print!("I");
-                } else {
-                    print!("{}", plant_type);
-                }
-            }
-            println!();
-        }
-        println!();
+        result
     }
-}
 
-impl Solution for Day12 {
     fn part1(&self, input: &str) -> String {
         // Parse input into grid
         let grid: Vec<Vec<char>> = input.lines().map(|line| line.chars().collect()).collect();
 
         // Find all regions
         let regions = self.find_regions(&grid);
-
-        // Debug: Visualize each region
-        for (plant_type, region) in regions.iter() {
-            self.visualize_region(region, *plant_type);
-        }
 
         // Calculate total price
         let total_price: usize = regions
@@ -285,12 +339,6 @@ impl Solution for Day12 {
         // Find all regions
         let regions = self.find_regions(&grid);
 
-        // Debug: Visualize each region
-        println!("\nPart 2 Regions:");
-        for (plant_type, region) in regions.iter() {
-            self.visualize_region(region, *plant_type);
-        }
-
         // Calculate total price using sides instead of perimeter
         let total_price: usize = regions
             .iter()
@@ -302,6 +350,16 @@ impl Solution for Day12 {
             .sum();
 
         total_price.to_string()
+    }
+}
+
+impl Solution for Day12 {
+    fn part1(&self, input: &str) -> String {
+        self.part1(input)
+    }
+
+    fn part2(&self, input: &str) -> String {
+        self.part2(input)
     }
 }
 
@@ -393,5 +451,41 @@ MIIIIIJJEE
 MIIISIJEEE
 MMMISSJEEE";
         assert_eq!(Day12.part2(input), "1206");
+    }
+
+    #[test]
+    fn test_part2_sample5() {
+        let input = "\
+XOO
+OXO
+OOO";
+        // O is one region, 10 sides
+        // each X is 4 sides
+        // should be 18 sides
+        assert_eq!(Day12.part2(input), "78");
+    }
+    #[test]
+    fn test_part2_sample6() {
+        let input = "\
+OOOO
+OXXO
+OXXO
+OOOO";
+        // O is one region, 10 sides
+        // each X is 4 sides
+        // should be 18 sides
+        assert_eq!(Day12.part2(input), "112");
+    }
+    #[test]
+    fn test_part2_sample7() {
+        let input = "\
+XOOO
+OXOO
+OOXO
+OOOO";
+        // O is one region, 10 sides
+        // each X is 4 sides
+        // should be 18 sides
+        assert_eq!(Day12.part2(input), "194");
     }
 }
