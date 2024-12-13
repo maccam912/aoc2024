@@ -1,17 +1,21 @@
 use crate::Solution;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 
 pub struct Day12;
 
 impl Day12 {
-    fn find_regions(&self, grid: &Vec<Vec<char>>) -> Vec<(char, HashSet<(usize, usize)>)> {
+    fn find_regions(&self, grid: &[Vec<char>]) -> Vec<(char, HashSet<(usize, usize)>)> {
         let rows = grid.len();
         let cols = grid[0].len();
         let mut visited = HashSet::new();
         let mut regions = Vec::new();
 
         // Helper function for BFS
-        fn bfs(grid: &Vec<Vec<char>>, start: (usize, usize), visited: &mut HashSet<(usize, usize)>) -> HashSet<(usize, usize)> {
+        fn bfs(
+            grid: &[Vec<char>],
+            start: (usize, usize),
+            visited: &mut HashSet<(usize, usize)>,
+        ) -> HashSet<(usize, usize)> {
             let rows = grid.len();
             let cols = grid[0].len();
             let plant_type = grid[start.0][start.1];
@@ -26,7 +30,7 @@ impl Day12 {
                 for (dr, dc) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
                     let new_r = r as i32 + dr;
                     let new_c = c as i32 + dc;
-                    
+
                     if new_r >= 0 && new_r < rows as i32 && new_c >= 0 && new_c < cols as i32 {
                         let new_r = new_r as usize;
                         let new_c = new_c as usize;
@@ -98,7 +102,7 @@ impl Day12 {
                     for (dr, dc) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
                         let nr = (cr as i32 + dr) as usize;
                         let nc = (cc as i32 + dc) as usize;
-                        
+
                         // If we hit the boundary, this isn't a hole
                         if nr < min_r || nr > max_r || nc < min_c || nc > max_c {
                             is_hole = false;
@@ -156,7 +160,7 @@ impl Day12 {
 
         // Count holes and subtract 2 for each one
         let holes = self.count_holes(region);
-        
+
         // Base 4 sides plus 2 for each inside corner, minus 2 for each hole
         4 + (inside_corners * 2) - (holes * 2)
     }
@@ -175,9 +179,15 @@ impl Day12 {
         let sides = self.calculate_sides(region);
         let inside_corners = (sides - 4) / 2; // Reverse calculate the number of inside corners
 
-        println!("\nRegion of type '{}' (size: {}, perimeter: {}, sides: {}, inside corners: {})", 
-            plant_type, region.len(), self.calculate_perimeter(region), sides, inside_corners);
-        
+        println!(
+            "\nRegion of type '{}' (size: {}, perimeter: {}, sides: {}, inside corners: {})",
+            plant_type,
+            region.len(),
+            self.calculate_perimeter(region),
+            sides,
+            inside_corners
+        );
+
         // Draw the region with corner markers
         for r in min_r..=max_r {
             for c in min_c..=max_c {
@@ -195,7 +205,7 @@ impl Day12 {
                     }
                     let r2 = (r as i32 + dr) as usize;
                     let c2 = (c as i32 + dc) as usize;
-                    
+
                     // Count cells in this 2x2
                     let mut count = 0;
                     for (dr2, dc2) in [(0, 0), (0, 1), (1, 0), (1, 1)] {
@@ -217,13 +227,14 @@ impl Day12 {
                             }
                         }
                     }
-                    
+
                     let is_hole = surrounding_count > 10;
 
                     // For normal edges: 3 cells = inside corner
                     // For holes: 1 cell = inside corner
-                    if (!is_hole && count == 3 && region.contains(&(r, c))) || 
-                       (is_hole && count == 1 && region.contains(&(r, c))) {
+                    if (!is_hole && count == 3 && region.contains(&(r, c)))
+                        || (is_hole && count == 1 && region.contains(&(r, c)))
+                    {
                         is_inside_corner = true;
                         break;
                     }
@@ -244,9 +255,7 @@ impl Day12 {
 impl Solution for Day12 {
     fn part1(&self, input: &str) -> String {
         // Parse input into grid
-        let grid: Vec<Vec<char>> = input.lines()
-            .map(|line| line.chars().collect())
-            .collect();
+        let grid: Vec<Vec<char>> = input.lines().map(|line| line.chars().collect()).collect();
 
         // Find all regions
         let regions = self.find_regions(&grid);
@@ -257,7 +266,8 @@ impl Solution for Day12 {
         }
 
         // Calculate total price
-        let total_price: usize = regions.iter()
+        let total_price: usize = regions
+            .iter()
             .map(|(_, region)| {
                 let area = region.len();
                 let perimeter = self.calculate_perimeter(region);
@@ -270,9 +280,7 @@ impl Solution for Day12 {
 
     fn part2(&self, input: &str) -> String {
         // Parse input into grid
-        let grid: Vec<Vec<char>> = input.lines()
-            .map(|line| line.chars().collect())
-            .collect();
+        let grid: Vec<Vec<char>> = input.lines().map(|line| line.chars().collect()).collect();
 
         // Find all regions
         let regions = self.find_regions(&grid);
@@ -284,7 +292,8 @@ impl Solution for Day12 {
         }
 
         // Calculate total price using sides instead of perimeter
-        let total_price: usize = regions.iter()
+        let total_price: usize = regions
+            .iter()
             .map(|(_, region)| {
                 let area = region.len();
                 let sides = self.calculate_sides(region);
@@ -368,5 +377,21 @@ ABBAAA
 ABBAAA
 AAAAAA";
         assert_eq!(Day12.part2(input), "368");
+    }
+
+    #[test]
+    fn test_part2_sample4() {
+        let input = "\
+RRRRIICCFF
+RRRRIICCCF
+VVRRRCCFFF
+VVRCCCJFFF
+VVVVCJJCFE
+VVIVCCJJEE
+VVIIICJJEE
+MIIIIIJJEE
+MIIISIJEEE
+MMMISSJEEE";
+        assert_eq!(Day12.part2(input), "1206");
     }
 }
