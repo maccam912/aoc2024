@@ -231,19 +231,23 @@ impl Warehouse {
     }
 
     fn calculate_gps(&self) -> i32 {
-        let mut seen_crates = std::collections::HashSet::new();
-        self.grid
-            .iter()
-            .filter(|(_, &v)| v >= 2) // Only consider crates (value >= 2)
-            .filter_map(|(coord, &v)| {
-                // For each crate, only count it once (the leftmost position)
-                let crate_id = v - 2; // Convert grid value to crate ID
-                if seen_crates.insert(crate_id) {
-                    // Calculate distance from edges
-                    Some(100 * coord.row as i32 + coord.col as i32)
-                } else {
-                    None
-                }
+        let mut crate_positions = std::collections::HashMap::new();
+        // First collect all positions for each crate
+        for (coord, &v) in self.grid.iter() {
+            if v >= 2 {
+                let crate_id = v - 2;
+                crate_positions
+                    .entry(crate_id)
+                    .or_insert_with(Vec::new)
+                    .push(coord);
+            }
+        }
+        // Then sum using the leftmost position for each crate
+        crate_positions
+            .into_iter()
+            .map(|(_, coords)| {
+                let leftmost = coords.into_iter().min_by_key(|c| c.col).unwrap();
+                100 * leftmost.row as i32 + leftmost.col as i32
             })
             .sum()
     }
