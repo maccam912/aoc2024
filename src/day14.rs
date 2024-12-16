@@ -223,7 +223,6 @@ impl Solution for Day14 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::read_input;
 
     #[test]
     fn test_part1_sample() {
@@ -241,17 +240,5 @@ p=7,3 v=-1,2
 p=2,4 v=2,-3
 p=9,5 v=-3,-3";
         assert_eq!(Day14.part1(input), "12");
-    }
-
-    #[test]
-    fn test_part1_real() {
-        let input = read_input(14, false);
-        assert_eq!(Day14.part1(&input), "Not implemented");
-    }
-
-    #[test]
-    fn test_part2_sample() {
-        let input = read_input(14, true);
-        assert_eq!(Day14.part2(&input), "Not implemented");
     }
 }
