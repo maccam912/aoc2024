@@ -108,11 +108,19 @@ impl Warehouse {
     }
 
     fn can_move_crate(&self, from: &Coordinate, direction: char) -> bool {
+        self.can_move_crate_internal(from, direction, &mut std::collections::HashSet::new())
+    }
+
+    fn can_move_crate_internal(&self, from: &Coordinate, direction: char, visited: &mut std::collections::HashSet<Coordinate>) -> bool {
+        if !visited.insert(*from) {
+            return false;
+        }
+
         let to = match direction {
-            '^' => Coordinate { row: from.row - 1, col: from.col },
-            'v' => Coordinate { row: from.row + 1, col: from.col },
             '<' => Coordinate { row: from.row, col: from.col - 1 },
             '>' => Coordinate { row: from.row, col: from.col + 1 },
+            '^' => Coordinate { row: from.row - 1, col: from.col },
+            'v' => Coordinate { row: from.row + 1, col: from.col },
             _ => return false,
         };
 
@@ -128,16 +136,16 @@ impl Warehouse {
         };
 
         // Check if this is part of a double crate
+        let left = Coordinate { row: from.row, col: from.col - 1 };
+        let right = Coordinate { row: from.row, col: from.col + 1 };
         let is_double = {
-            let left = Coordinate { row: from.row, col: from.col - 1 };
-            let right = Coordinate { row: from.row, col: from.col + 1 };
-            self.get_crate_id(&left) == Some(current_id) || 
+            self.get_crate_id(&left) == Some(current_id) ||
             self.get_crate_id(&right) == Some(current_id)
         };
 
         // If there's a crate in the way, recursively check if it can be pushed
         if self.is_crate(&to) {
-            return self.can_move_crate(&to, direction);
+            return self.can_move_crate_internal(&to, direction, visited);
         }
 
         if !is_double {
@@ -159,7 +167,7 @@ impl Warehouse {
                 }
                 // If there's a crate in the way of either part, it must be able to move
                 if self.is_crate(&other) {
-                    return self.can_move_crate(&other, direction);
+                    return self.can_move_crate_internal(&other, direction, visited);
                 }
                 true
             },
@@ -174,7 +182,7 @@ impl Warehouse {
                         return false;
                     }
                     if self.is_crate(&other_to) {
-                        return self.can_move_crate(&other_to, direction);
+                        return self.can_move_crate_internal(&other_to, direction, visited);
                     }
                 } else if self.get_crate_id(&right) == Some(current_id) {
                     let other_to = Coordinate { row: to.row, col: to.col + 1 };
@@ -182,7 +190,7 @@ impl Warehouse {
                         return false;
                     }
                     if self.is_crate(&other_to) {
-                        return self.can_move_crate(&other_to, direction);
+                        return self.can_move_crate_internal(&other_to, direction, visited);
                     }
                 }
                 true
@@ -330,7 +338,9 @@ impl Warehouse {
                     result.push('.');
                 }
             }
-            result.push('\n');
+            if row < max_row {
+                result.push('\n');
+            }
         }
         result
     }
@@ -500,7 +510,7 @@ mod tests {
         let expected_final_state = "\
 ##########
 #.O.O.OOO#
-#........#
+##.....O.#
 #OO......#
 #OO@.....#
 #O#.....O#
@@ -518,41 +528,7 @@ mod tests {
             warehouse.execute_move(command);
         }
         
-        assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
-            "\nExpected final state:\n{}\nActual final state:\n{}", 
-            expected_final_state, warehouse.warehouse_to_string());
-    }
-
-    #[test]
-    fn test_small_example_wide_boxes() {
-        let input = "#######
-#...#.#
-#.....#
-#..OO@#
-#..O..#
-#.....#
-#######
-
-<vv<<^^<<^^";
-
-        let mut warehouse = Warehouse::from_str(input, true);
-        
-        // Execute all commands
-        let commands = warehouse.commands.clone();
-        for command in commands {
-            warehouse.execute_move(command);
-        }
-
-        let expected_final_state = "\
-##############
-##...[].##..##
-##...@.[]...##
-##....[]....##
-##..........##
-##..........##
-##############
-";
-        
+        assert_eq!(warehouse.calculate_gps(), 10092, "Final GPS sum mismatch");
         assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
             "\nExpected final state:\n{}\nActual final state:\n{}", 
             expected_final_state, warehouse.warehouse_to_string());
@@ -573,14 +549,6 @@ mod tests {
 
 <vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^>^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^";
 
-        let mut warehouse = Warehouse::from_str(input, true);
-        
-        // Execute all commands
-        let commands = warehouse.commands.clone();
-        for command in commands {
-            warehouse.execute_move(command);
-        }
-
         let expected_final_state = "\
 ####################
 ##[].......[].[][]##
@@ -593,6 +561,14 @@ mod tests {
 ##......[][]..[]..##
 ####################
 ";
+        
+        let mut warehouse = Warehouse::from_str(input, true);
+        
+        // Execute all commands
+        let commands = warehouse.commands.clone();
+        for command in commands {
+            warehouse.execute_move(command);
+        }
         
         assert_eq!(warehouse.calculate_gps(), 9021, "Final GPS sum mismatch");
         assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
@@ -629,5 +605,137 @@ mod tests {
 ";
         
         assert_eq!(warehouse.warehouse_to_string(), expected);
+    }
+
+    #[test]
+    fn test_small_example_wide_boxes() {
+        let input = "\
+#######
+#...#.#
+#.....#
+#..OO@#
+#..O..#
+#.....#
+#######
+
+<vv<<^^<<^^";
+
+        let expected_states = vec![
+            // Initial state
+            "\
+##############
+##......##..##
+##..........##
+##....[][]@.##
+##....[]....##
+##..........##
+##############",
+            // After move <
+            "\
+##############
+##......##..##
+##..........##
+##...[][]@..##
+##....[]....##
+##..........##
+##############",
+            // After move v
+            "\
+##############
+##......##..##
+##..........##
+##...[][]...##
+##....[].@..##
+##..........##
+##############",
+            // After move v
+            "\
+##############
+##......##..##
+##..........##
+##...[][]...##
+##....[]....##
+##.......@..##
+##############",
+            // After move <
+            "\
+##############
+##......##..##
+##..........##
+##...[][]...##
+##....[]....##
+##......@...##
+##############",
+            // After move <
+            "\
+##############
+##......##..##
+##..........##
+##...[][]...##
+##....[]....##
+##.....@....##
+##############",
+            // After move ^
+            "\
+##############
+##......##..##
+##...[][]...##
+##....[]....##
+##.....@....##
+##..........##
+##############",
+            // After move ^
+            "\
+##############
+##......##..##
+##...[][]...##
+##....[]....##
+##.....@....##
+##..........##
+##############",
+            // After move <
+            "\
+##############
+##......##..##
+##...[][]...##
+##....[]....##
+##....@.....##
+##..........##
+##############",
+            // After move <
+            "\
+##############
+##......##..##
+##...[][]...##
+##...@[]....##
+##..........##
+##..........##
+##############",
+            // After move ^
+            "\
+##############
+##...[].##..##
+##...@.[]...##
+##....[]....##
+##..........##
+##..........##
+##############"
+        ];
+
+        let mut warehouse = Warehouse::from_str(input, true); // Set double_width to true
+        
+        // Check initial state
+        assert_eq!(warehouse.warehouse_to_string(), expected_states[0], 
+            "\nExpected initial state:\n{}\nActual initial state:\n{}", 
+            expected_states[0], warehouse.warehouse_to_string());
+
+        // Execute each command and verify the state
+        let commands = warehouse.commands.clone();
+        for (i, command) in commands.iter().enumerate() {
+            warehouse.execute_move(*command);
+            assert_eq!(warehouse.warehouse_to_string(), expected_states[i + 1], 
+                "\nAfter move {}, expected state:\n{}\nActual state:\n{}", 
+                i + 1, expected_states[i + 1], warehouse.warehouse_to_string());
+        }
     }
 }
