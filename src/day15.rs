@@ -467,4 +467,81 @@ mod tests {
             "\nExpected final state:\n{}\nActual final state:\n{}", 
             expected_final_state, warehouse.warehouse_to_string());
     }
+
+    #[test]
+    fn test_small_example_wide_boxes() {
+        let input = "#######
+#...#.#
+#.....#
+#..OO@#
+#..O..#
+#.....#
+#######
+
+<vv<<^^<<^^";
+
+        let mut warehouse = Warehouse::from_str(input);
+        
+        // Execute all commands
+        let commands = warehouse.commands.clone();
+        for command in commands {
+            warehouse.execute_move(command);
+        }
+
+        let expected_final_state = "\
+##############
+##...[].##..##
+##...@.[]...##
+##....[]....##
+##..........##
+##..........##
+##############
+";
+        
+        assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
+            "\nExpected final state:\n{}\nActual final state:\n{}", 
+            expected_final_state, warehouse.warehouse_to_string());
+    }
+
+    #[test]
+    fn test_large_example_wide_boxes() {
+        let input = "##########
+#..O..O.O#
+#......O.#
+#.OO..O.O#
+#..O@..O.#
+#O#..O...#
+#O..O..O.#
+#.OO.O.OO#
+#....O...#
+##########
+
+<vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^>^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^";
+
+        let mut warehouse = Warehouse::from_str(input);
+        
+        // Execute all commands
+        let commands = warehouse.commands.clone();
+        for command in commands {
+            warehouse.execute_move(command);
+        }
+
+        let expected_final_state = "\
+####################
+##[].......[].[][]##
+##[]...........[].##
+##[]........[][][]##
+##[]......[]....[]##
+##..##......[]....##
+##..[]............##
+##..@......[].[][]##
+##......[][]..[]..##
+####################
+";
+        
+        assert_eq!(warehouse.calculate_gps(), 9021, "Final GPS sum mismatch");
+        assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
+            "\nExpected final state:\n{}\nActual final state:\n{}", 
+            expected_final_state, warehouse.warehouse_to_string());
+    }
 }
