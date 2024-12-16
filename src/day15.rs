@@ -231,10 +231,20 @@ impl Warehouse {
     }
 
     fn calculate_gps(&self) -> i32 {
+        let mut seen_crates = std::collections::HashSet::new();
         self.grid
             .iter()
             .filter(|(_, &v)| v >= 2) // Only consider crates (value >= 2)
-            .map(|(coord, _)| 100 * (coord.row as i32) + coord.col as i32)
+            .filter_map(|(coord, &v)| {
+                // For each crate, only count it once (the leftmost position)
+                let crate_id = v - 2; // Convert grid value to crate ID
+                if seen_crates.insert(crate_id) {
+                    // Calculate distance from edges
+                    Some(100 * coord.row as i32 + coord.col as i32)
+                } else {
+                    None
+                }
+            })
             .sum()
     }
 
@@ -571,6 +581,34 @@ mod tests {
         
         assert_states_eq(&warehouse.warehouse_to_string(), expected, 
             "Initial state mismatch in double mode");
+    }
+
+    #[test]
+    fn test_large_example_wide_boxes_gps() {
+        let input = "##########
+#..O..O.O#
+#......O.#
+#.OO..O.O#
+#..O@..O.#
+#O#..O...#
+#O..O..O.#
+#.OO.O.OO#
+#....O...#
+##########
+
+<vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^>^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^";
+
+        let mut warehouse = Warehouse::from_str(input, true);
+        
+        // Execute all commands
+        let commands = warehouse.commands.clone();
+        for command in commands {
+            warehouse.execute_move(command);
+        }
+
+        println!("{}", warehouse.warehouse_to_string());
+        
+        assert_eq!(warehouse.calculate_gps(), 9021);
     }
 
     #[test]
