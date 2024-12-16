@@ -26,10 +26,11 @@ struct Warehouse {
     grid: HashMap<Coordinate, i32>,
     robot: Robot,
     commands: Vec<char>,
+    double_mode: bool,
 }
 
 impl Warehouse {
-    fn from_str(input: &str) -> Self {
+    fn from_str(input: &str, double_mode: bool) -> Self {
         let mut grid = HashMap::new();
         let mut robot = None;
         let mut commands = Vec::new();
@@ -47,18 +48,36 @@ impl Warehouse {
             
             if parsing_grid {
                 for (col, ch) in line.chars().enumerate() {
+                    let base_col = if double_mode { col * 2 } else { col };
                     let coord = Coordinate {
                         row: row as i32,
-                        col: col as i32,
+                        col: base_col as i32,
                     };
                     
                     match ch {
-                        '#' => { grid.insert(coord, 1); }, // Wall
+                        '#' => { 
+                            grid.insert(coord, 1);
+                            if double_mode {
+                                grid.insert(Coordinate { 
+                                    row: row as i32, 
+                                    col: (base_col + 1) as i32 
+                                }, 1);
+                            }
+                        },
                         'O' => { 
                             grid.insert(coord, next_crate_id);
+                            if double_mode {
+                                grid.insert(Coordinate { 
+                                    row: row as i32, 
+                                    col: (base_col + 1) as i32 
+                                }, next_crate_id);
+                            }
                             next_crate_id += 1;
                         },
-                        '@' => { robot = Some(Robot { position: coord }); },
+                        '@' => { 
+                            robot = Some(Robot { position: coord }); 
+                            // In double mode, the space after @ is empty
+                        },
                         _ => (), // Empty space or other characters
                     }
                 }
@@ -72,6 +91,7 @@ impl Warehouse {
             grid,
             robot: robot.expect("Robot position not found in input"),
             commands,
+            double_mode,
         }
     }
 
@@ -258,29 +278,57 @@ impl Warehouse {
     }
 
     fn warehouse_to_string(&self) -> String {
-        let mut max_row = 0;
-        let mut max_col = 0;
-        
-        // Find the bounds
+        let mut min_row = i32::MAX;
+        let mut max_row = i32::MIN;
+        let mut min_col = i32::MAX;
+        let mut max_col = i32::MIN;
+
+        // Find the bounds of the warehouse
         for coord in self.grid.keys() {
+            min_row = min_row.min(coord.row);
             max_row = max_row.max(coord.row);
+            min_col = min_col.min(coord.col);
             max_col = max_col.max(coord.col);
         }
-        
+
         let mut result = String::new();
-        for row in 0..=max_row {
-            for col in 0..=max_col {
+        for row in min_row..=max_row {
+            for col in min_col..=max_col {
                 let coord = Coordinate { row, col };
-                let ch = if self.is_wall(&coord) {
-                    '#'
-                } else if self.is_crate(&coord) {
-                    'O'
-                } else if coord == self.robot.position {
-                    '@'
+                let robot_here = self.robot.position == coord;
+                
+                if robot_here {
+                    result.push('@');
+                } else if let Some(&value) = self.grid.get(&coord) {
+                    if value == 1 {
+                        result.push('#');
+                    } else if self.double_mode {
+                        // In double mode, we only want to print '[' for even columns and ']' for odd columns
+                        // when they contain the same crate ID
+                        if col % 2 == 0 {
+                            let next_coord = Coordinate { row, col: col + 1 };
+                            if let Some(&next_value) = self.grid.get(&next_coord) {
+                                if next_value == value && value >= 2 {
+                                    result.push('[');
+                                    continue;
+                                }
+                            }
+                        } else {
+                            let prev_coord = Coordinate { row, col: col - 1 };
+                            if let Some(&prev_value) = self.grid.get(&prev_coord) {
+                                if prev_value == value && value >= 2 {
+                                    result.push(']');
+                                    continue;
+                                }
+                            }
+                        }
+                        result.push('.');  // Fallback if not part of a crate pair
+                    } else {
+                        result.push('O');
+                    }
                 } else {
-                    '.'
-                };
-                result.push(ch);
+                    result.push('.');
+                }
             }
             result.push('\n');
         }
@@ -293,7 +341,7 @@ pub struct Day15;
 
 impl Solution for Day15 {
     fn part1(&self, input: &str) -> String {
-        let mut warehouse = Warehouse::from_str(input);
+        let mut warehouse = Warehouse::from_str(input, false);
         
         // Execute all commands
         for command in warehouse.commands.clone() {
@@ -304,7 +352,14 @@ impl Solution for Day15 {
     }
 
     fn part2(&self, input: &str) -> String {
-        "Not implemented".to_string()
+        let mut warehouse = Warehouse::from_str(input, true);
+        
+        // Execute all commands
+        for command in warehouse.commands.clone() {
+            warehouse.execute_move(command);
+        }
+        
+        warehouse.calculate_gps().to_string()
     }
 }
 
@@ -315,7 +370,7 @@ mod tests {
     #[test]
     fn test_parse_input() {
         let input = "########\n#..O.O.#\n##@.O..#\n#...O..#\n#.#.O..#\n#...O..#\n#......#\n########\n\n<^^>>>vv<v>>v<<";
-        let warehouse = Warehouse::from_str(input);
+        let warehouse = Warehouse::from_str(input, false);
         
         // Basic checks
         assert!(warehouse.grid.values().any(|&v| v == 1)); // Has walls
@@ -353,7 +408,7 @@ mod tests {
 
 <^^>>>vv<v>>v<<";
         
-        let mut warehouse = Warehouse::from_str(input);
+        let mut warehouse = Warehouse::from_str(input, false);
         
         // Execute all commands
         let commands = warehouse.commands.clone();
@@ -388,7 +443,7 @@ mod tests {
 ########
 ";
         
-        let mut warehouse = Warehouse::from_str(input);
+        let mut warehouse = Warehouse::from_str(input, false);
         
         // Execute all commands
         let commands = warehouse.commands.clone();
@@ -416,7 +471,7 @@ mod tests {
 
 <vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^>^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^";
 
-        let mut warehouse = Warehouse::from_str(input);
+        let mut warehouse = Warehouse::from_str(input, false);
         
         // Execute all commands
         let commands = warehouse.commands.clone();
@@ -455,7 +510,7 @@ mod tests {
 ##########
 ";
 
-        let mut warehouse = Warehouse::from_str(input);
+        let mut warehouse = Warehouse::from_str(input, false);
         
         // Execute all commands
         let commands = warehouse.commands.clone();
@@ -480,7 +535,7 @@ mod tests {
 
 <vv<<^^<<^^";
 
-        let mut warehouse = Warehouse::from_str(input);
+        let mut warehouse = Warehouse::from_str(input, true);
         
         // Execute all commands
         let commands = warehouse.commands.clone();
@@ -518,7 +573,7 @@ mod tests {
 
 <vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^>^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^";
 
-        let mut warehouse = Warehouse::from_str(input);
+        let mut warehouse = Warehouse::from_str(input, true);
         
         // Execute all commands
         let commands = warehouse.commands.clone();
@@ -543,5 +598,36 @@ mod tests {
         assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
             "\nExpected final state:\n{}\nActual final state:\n{}", 
             expected_final_state, warehouse.warehouse_to_string());
+    }
+
+    #[test]
+    fn test_double_mode_example() {
+        let input = "\
+##########
+#..O..O.O#
+#......O.#
+#.OO..O.O#
+#..O@..O.#
+#O#..O...#
+#O..O..O.#
+#.OO.O.OO#
+#....O...#
+##########";
+
+        let warehouse = Warehouse::from_str(input, true);
+        let expected = "\
+####################
+##....[]....[]..[]##
+##............[]..##
+##..[][]....[]..[]##
+##....[]@.....[]..##
+##[]##....[]......##
+##[]....[]....[]..##
+##..[][]..[]..[][]##
+##........[]......##
+####################
+";
+        
+        assert_eq!(warehouse.warehouse_to_string(), expected);
     }
 }
