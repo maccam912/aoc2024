@@ -1,289 +1,310 @@
 use crate::Solution;
 use std::collections::HashMap;
-use std::any::Any;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Coordinate {
+    row: i32,
+    col: i32,
+}
+
+#[derive(Debug)]
+struct Robot {
+    position: Coordinate,
+}
+
+#[derive(Debug)]
+struct Wall;
+
+#[derive(Debug)]
+struct Crate;
+
+#[derive(Debug)]
+struct DoubleCrate;
+
+#[derive(Debug)]
+struct Warehouse {
+    grid: HashMap<Coordinate, i32>,
+    robot: Robot,
+    commands: Vec<char>,
+}
+
+impl Warehouse {
+    fn from_str(input: &str) -> Self {
+        let mut grid = HashMap::new();
+        let mut robot = None;
+        let mut commands = Vec::new();
+        let mut next_crate_id = 2; // Start crate IDs at 2
+        
+        // Parse the grid
+        let lines: Vec<&str> = input.lines().collect();
+        let mut parsing_grid = true;
+        
+        for (row, line) in lines.iter().enumerate() {
+            if line.is_empty() {
+                parsing_grid = false;
+                continue;
+            }
+            
+            if parsing_grid {
+                for (col, ch) in line.chars().enumerate() {
+                    let coord = Coordinate {
+                        row: row as i32,
+                        col: col as i32,
+                    };
+                    
+                    match ch {
+                        '#' => { grid.insert(coord, 1); }, // Wall
+                        'O' => { 
+                            grid.insert(coord, next_crate_id);
+                            next_crate_id += 1;
+                        },
+                        '@' => { robot = Some(Robot { position: coord }); },
+                        _ => (), // Empty space or other characters
+                    }
+                }
+            } else {
+                // Parse commands
+                commands.extend(line.chars().filter(|&c| "^v<>".contains(c)));
+            }
+        }
+        
+        Warehouse {
+            grid,
+            robot: robot.expect("Robot position not found in input"),
+            commands,
+        }
+    }
+
+    fn is_wall(&self, coord: &Coordinate) -> bool {
+        self.grid.get(coord).map_or(false, |&v| v == 1)
+    }
+
+    fn is_crate(&self, coord: &Coordinate) -> bool {
+        self.grid.get(coord).map_or(false, |&v| v >= 2)
+    }
+
+    fn get_crate_id(&self, coord: &Coordinate) -> Option<i32> {
+        self.grid.get(coord).copied().filter(|&v| v >= 2)
+    }
+
+    fn can_move_crate(&self, from: &Coordinate, direction: char) -> bool {
+        let to = match direction {
+            '^' => Coordinate { row: from.row - 1, col: from.col },
+            'v' => Coordinate { row: from.row + 1, col: from.col },
+            '<' => Coordinate { row: from.row, col: from.col - 1 },
+            '>' => Coordinate { row: from.row, col: from.col + 1 },
+            _ => return false,
+        };
+
+        // Check if destination is blocked by wall
+        if self.is_wall(&to) {
+            return false;
+        }
+
+        // Get the crate ID at the current position
+        let current_id = match self.get_crate_id(from) {
+            Some(id) => id,
+            None => return false,
+        };
+
+        // Check if this is part of a double crate
+        let is_double = {
+            let left = Coordinate { row: from.row, col: from.col - 1 };
+            let right = Coordinate { row: from.row, col: from.col + 1 };
+            self.get_crate_id(&left) == Some(current_id) || 
+            self.get_crate_id(&right) == Some(current_id)
+        };
+
+        // If there's a crate in the way, recursively check if it can be pushed
+        if self.is_crate(&to) {
+            return self.can_move_crate(&to, direction);
+        }
+
+        if !is_double {
+            return true;
+        }
+
+        // For double crates
+        match direction {
+            '<' | '>' => {
+                // For horizontal movement, both parts must be able to move
+                let other = if self.get_crate_id(&Coordinate { row: from.row, col: from.col - 1 }) == Some(current_id) {
+                    Coordinate { row: to.row, col: to.col - 1 }
+                } else {
+                    Coordinate { row: to.row, col: to.col + 1 }
+                };
+                // Check if destination is blocked by wall
+                if self.is_wall(&other) {
+                    return false;
+                }
+                // If there's a crate in the way of either part, it must be able to move
+                if self.is_crate(&other) {
+                    return self.can_move_crate(&other, direction);
+                }
+                true
+            },
+            '^' | 'v' => {
+                // For vertical movement, check both sides
+                let left = Coordinate { row: from.row, col: from.col - 1 };
+                let right = Coordinate { row: from.row, col: from.col + 1 };
+                
+                if self.get_crate_id(&left) == Some(current_id) {
+                    let other_to = Coordinate { row: to.row, col: to.col - 1 };
+                    if self.is_wall(&other_to) {
+                        return false;
+                    }
+                    if self.is_crate(&other_to) {
+                        return self.can_move_crate(&other_to, direction);
+                    }
+                } else if self.get_crate_id(&right) == Some(current_id) {
+                    let other_to = Coordinate { row: to.row, col: to.col + 1 };
+                    if self.is_wall(&other_to) {
+                        return false;
+                    }
+                    if self.is_crate(&other_to) {
+                        return self.can_move_crate(&other_to, direction);
+                    }
+                }
+                true
+            },
+            _ => false,
+        }
+    }
+
+    fn move_crate(&mut self, from: &Coordinate, direction: char) -> bool {
+        if !self.can_move_crate(from, direction) {
+            return false;
+        }
+
+        let to = match direction {
+            '^' => Coordinate { row: from.row - 1, col: from.col },
+            'v' => Coordinate { row: from.row + 1, col: from.col },
+            '<' => Coordinate { row: from.row, col: from.col - 1 },
+            '>' => Coordinate { row: from.row, col: from.col + 1 },
+            _ => return false,
+        };
+
+        // If there's a crate in the destination, move it first (recursively)
+        if self.is_crate(&to) {
+            self.move_crate(&to, direction);
+        }
+
+        let current_id = self.get_crate_id(from).unwrap();
+        
+        // Handle double crates
+        let left = Coordinate { row: from.row, col: from.col - 1 };
+        let right = Coordinate { row: from.row, col: from.col + 1 };
+        
+        if self.get_crate_id(&left) == Some(current_id) {
+            // If there's a crate in the destination of the left part, move it first
+            let to_left = Coordinate { row: to.row, col: to.col - 1 };
+            if self.is_crate(&to_left) {
+                self.move_crate(&to_left, direction);
+            }
+            // Move left part
+            let from_left = left;
+            self.grid.remove(&from_left);
+            self.grid.insert(to_left, current_id);
+        } else if self.get_crate_id(&right) == Some(current_id) {
+            // If there's a crate in the destination of the right part, move it first
+            let to_right = Coordinate { row: to.row, col: to.col + 1 };
+            if self.is_crate(&to_right) {
+                self.move_crate(&to_right, direction);
+            }
+            // Move right part
+            let from_right = right;
+            self.grid.remove(&from_right);
+            self.grid.insert(to_right, current_id);
+        }
+
+        // Move the main crate
+        self.grid.remove(from);
+        self.grid.insert(to, current_id);
+        true
+    }
+
+    fn calculate_gps(&self) -> i32 {
+        self.grid
+            .iter()
+            .filter(|(_, &v)| v >= 2) // Only consider crates (value >= 2)
+            .map(|(coord, _)| 100 * (coord.row as i32) + coord.col as i32)
+            .sum()
+    }
+
+    fn execute_move(&mut self, command: char) {
+        let robot_pos = self.robot.position;
+        let new_pos = match command {
+            '^' => Coordinate { row: robot_pos.row - 1, col: robot_pos.col },
+            'v' => Coordinate { row: robot_pos.row + 1, col: robot_pos.col },
+            '<' => Coordinate { row: robot_pos.row, col: robot_pos.col - 1 },
+            '>' => Coordinate { row: robot_pos.row, col: robot_pos.col + 1 },
+            _ => return,
+        };
+
+        // If there's a wall in the way, don't move
+        if self.is_wall(&new_pos) {
+            return;
+        }
+
+        // If there's a crate in the way, try to move it
+        if self.is_crate(&new_pos) {
+            if !self.move_crate(&new_pos, command) {
+                return;
+            }
+        }
+
+        // Update robot position
+        self.robot.position = new_pos;
+    }
+
+    fn warehouse_to_string(&self) -> String {
+        let mut max_row = 0;
+        let mut max_col = 0;
+        
+        // Find the bounds
+        for coord in self.grid.keys() {
+            max_row = max_row.max(coord.row);
+            max_col = max_col.max(coord.col);
+        }
+        
+        let mut result = String::new();
+        for row in 0..=max_row {
+            for col in 0..=max_col {
+                let coord = Coordinate { row, col };
+                let ch = if self.is_wall(&coord) {
+                    '#'
+                } else if self.is_crate(&coord) {
+                    'O'
+                } else if coord == self.robot.position {
+                    '@'
+                } else {
+                    '.'
+                };
+                result.push(ch);
+            }
+            result.push('\n');
+        }
+        result
+    }
+}
 
 #[derive(Debug)]
 pub struct Day15;
 
 impl Solution for Day15 {
-    fn part1(&self, _input: &str) -> String {
-        todo!("Implement part 1")
-    }
-
-    fn part2(&self, _input: &str) -> String {
-        todo!("Implement part 2")
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Direction {
-    North,
-    South,
-    East,
-    West,
-}
-
-impl From<char> for Direction {
-    fn from(c: char) -> Self {
-        match c {
-            '^' => Direction::North,
-            'v' => Direction::South,
-            '>' => Direction::East,
-            '<' => Direction::West,
-            _ => panic!("Invalid direction character: {}", c),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Coordinate {
-    row: i32,
-    col: i32,
-}
-
-impl Coordinate {
-    fn next_in_direction(&self, dir: Direction) -> Coordinate {
-        match dir {
-            Direction::North => Coordinate { row: self.row - 1, col: self.col },
-            Direction::South => Coordinate { row: self.row + 1, col: self.col },
-            Direction::East => Coordinate { row: self.row, col: self.col + 1 },
-            Direction::West => Coordinate { row: self.row, col: self.col - 1 },
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Robot {
-    pos: Coordinate,
-}
-
-#[derive(Debug, Clone)]
-pub struct SingleCrate {
-    pos: Coordinate,
-}
-
-#[derive(Debug, Clone)]
-pub struct DoubleCrate {
-    pos: Coordinate, // tracks left side of the crate
-}
-
-#[derive(Debug, Clone)]
-pub struct Wall {
-    pos: Coordinate,
-}
-
-impl Robot {
-    pub fn new(row: i32, col: i32) -> Self {
-        Self {
-            pos: Coordinate { row, col },
-        }
-    }
-}
-
-impl SingleCrate {
-    pub fn new(row: i32, col: i32) -> Self {
-        Self {
-            pos: Coordinate { row, col },
-        }
-    }
-}
-
-impl DoubleCrate {
-    pub fn new(row: i32, col: i32) -> Self {
-        Self {
-            pos: Coordinate { row, col },
-        }
-    }
-}
-
-impl Wall {
-    pub fn new(row: i32, col: i32) -> Self {
-        Self {
-            pos: Coordinate { row, col },
-        }
-    }
-}
-
-pub trait HasPosition {
-    fn pos(&self) -> &Coordinate;
-}
-
-impl HasPosition for Robot {
-    fn pos(&self) -> &Coordinate {
-        &self.pos
-    }
-}
-
-impl HasPosition for SingleCrate {
-    fn pos(&self) -> &Coordinate {
-        &self.pos
-    }
-}
-
-impl HasPosition for DoubleCrate {
-    fn pos(&self) -> &Coordinate {
-        &self.pos
-    }
-}
-
-impl HasPosition for Wall {
-    fn pos(&self) -> &Coordinate {
-        &self.pos
-    }
-}
-
-#[derive(Debug, Clone)]
-enum GameObject {
-    Robot(Robot),
-    SingleCrate(SingleCrate),
-    DoubleCrate(DoubleCrate),
-    Wall(Wall),
-}
-
-impl GameObject {
-    fn pos(&self) -> &Coordinate {
-        match self {
-            GameObject::Robot(r) => r.pos(),
-            GameObject::SingleCrate(c) => c.pos(),
-            GameObject::DoubleCrate(d) => d.pos(),
-            GameObject::Wall(w) => w.pos(),
-        }
-    }
-}
-
-struct Warehouse {
-    objects: HashMap<isize, GameObject>, // Owns the objects, uses an ID to keep track of them
-    grid: HashMap<Coordinate, isize>, // Maps coordinates to object IDs
-    width: i32,
-    height: i32,
-    robot_location: Coordinate,
-}
-
-impl Warehouse {
-    fn new(width: i32, height: i32) -> Self {
-        Self {
-            objects: HashMap::new(),
-            grid: HashMap::new(),
-            width,
-            height,
-            robot_location: Coordinate { row: 0, col: 0 },
-        }
-    }
-
-    fn add_object(&mut self, obj: GameObject) -> isize {
-        let id = self.objects.len() as isize;
-        self.objects.insert(id, obj.clone());
-        self.grid.insert(obj.pos().clone(), id);
-        // If GameObject is a DoubleCrate, also add the right side
-        if let GameObject::DoubleCrate(dc) = obj {
-            self.grid.insert(Coordinate { row: dc.pos().row, col: dc.pos().col + 1 }, id);
-        }
-        id
-    }
-
-    fn get_object_at(&self, pos: &Coordinate) -> Option<&GameObject> {
-        self.grid.get(pos).map(|id| &self.objects[id])
-    }
-
-    fn can_move_chain(&self, start_pos: &Coordinate, dir: Direction) -> bool {
-        let next_pos = start_pos.next_in_direction(dir);
+    fn part1(&self, input: &str) -> String {
+        let mut warehouse = Warehouse::from_str(input);
         
-        match self.get_object_at(&next_pos) {
-            None => true, // Empty space
-            Some(GameObject::Wall(_)) => false,
-            Some(GameObject::SingleCrate(_)) => {
-                // Recursively check if the crate can move
-                self.can_move_chain(&next_pos, dir)
-            }
-            Some(GameObject::DoubleCrate(_)) => false, // Not implementing double crates yet
-            Some(GameObject::Robot(_)) => false, // Should never happen in valid puzzle
-        }
-    }
-
-    fn move_objects(&mut self, start_pos: &Coordinate, dir: Direction) -> bool {
-        if !self.can_move_chain(start_pos, dir) {
-            return false;
-        }
-
-        let next_pos = start_pos.next_in_direction(dir);
-        
-        // If there's a crate at the next position, move it first
-        if let Some(obj_id) = self.grid.get(&next_pos).copied() {
-            if let GameObject::SingleCrate(_) = &self.objects[&obj_id] {
-                // Move the crate first
-                self.move_objects(&next_pos, dir);
-                
-                // Update crate position
-                if let GameObject::SingleCrate(ref mut crate_obj) = self.objects.get_mut(&obj_id).unwrap() {
-                    let new_pos = next_pos.next_in_direction(dir);
-                    self.grid.remove(&next_pos);
-                    self.grid.insert(new_pos, obj_id);
-                    crate_obj.pos = new_pos;
-                }
-            }
-        }
-
-        // Now move the robot
-        if let Some(robot_id) = self.grid.get(start_pos).copied() {
-            if let GameObject::Robot(ref mut robot) = self.objects.get_mut(&robot_id).unwrap() {
-                self.grid.remove(start_pos);
-                self.grid.insert(next_pos, robot_id);
-                robot.pos = next_pos;
-                self.robot_location = next_pos;
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    }
-
-    pub fn execute_move(&mut self, dir: Direction) -> bool {
-        let start_pos = self.robot_location;
-        self.move_objects(&start_pos, dir)
-    }
-
-    pub fn parse(input: &str) -> (Self, Vec<Direction>) {
-        let lines: Vec<&str> = input.lines().collect();
-        
-        let height = lines.len() as i32;
-        let width = lines[0].len() as i32;
-        
-        let mut warehouse = Self::new(width, height);
-        let mut robot_found = false;
-        
-        // First part is the map
-        for (row, line) in lines.iter().enumerate() {
-            for (col, c) in line.chars().enumerate() {
-                let pos = Coordinate { row: row as i32, col: col as i32 };
-                match c {
-                    '#' => {
-                        warehouse.add_object(GameObject::Wall(Wall::new(pos.row, pos.col)));
-                    }
-                    '@' => {
-                        if robot_found {
-                            panic!("Multiple robots found in map");
-                        }
-                        let robot = Robot::new(pos.row, pos.col);
-                        warehouse.robot_location = pos;
-                        warehouse.add_object(GameObject::Robot(robot));
-                        robot_found = true;
-                    }
-                    'O' => {
-                        warehouse.add_object(GameObject::SingleCrate(SingleCrate::new(pos.row, pos.col)));
-                    }
-                    '.' => (), // Empty space
-                    _ => panic!("Invalid map character: {}", c),
-                }
-            }
+        // Execute all commands
+        for command in warehouse.commands.clone() {
+            warehouse.execute_move(command);
         }
         
-        if !robot_found {
-            panic!("No robot found in map");
-        }
+        warehouse.calculate_gps().to_string()
+    }
 
-        (warehouse, Vec::new()) // For now, return empty movement sequence
+    fn part2(&self, input: &str) -> String {
+        "Not implemented".to_string()
     }
 }
 
@@ -292,101 +313,158 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_direction_from_char() {
-        assert_eq!(Direction::from('^'), Direction::North);
-        assert_eq!(Direction::from('v'), Direction::South);
-        assert_eq!(Direction::from('>'), Direction::East);
-        assert_eq!(Direction::from('<'), Direction::West);
-    }
+    fn test_parse_input() {
+        let input = "########\n#..O.O.#\n##@.O..#\n#...O..#\n#.#.O..#\n#...O..#\n#......#\n########\n\n<^^>>>vv<v>>v<<";
+        let warehouse = Warehouse::from_str(input);
+        
+        // Basic checks
+        assert!(warehouse.grid.values().any(|&v| v == 1)); // Has walls
+        assert!(warehouse.grid.values().any(|&v| v >= 2)); // Has crates
+        assert!(!warehouse.commands.is_empty()); // Has commands
 
-    #[test]
-    #[should_panic(expected = "Invalid direction character")]
-    fn test_invalid_direction() {
-        let _ = Direction::from('x');
-    }
-
-    #[test]
-    fn test_warehouse_parsing() {
-        let input = "
-#####
-#@O.#
-#####".trim();
-        let (warehouse, _) = Warehouse::parse(input);
-        
-        // Check dimensions
-        assert_eq!(warehouse.width, 5);
-        assert_eq!(warehouse.height, 3);
-        
-        // Check robot position
-        assert_eq!(warehouse.robot_location, Coordinate { row: 1, col: 1 });
-        
-        // Check crate position
-        let crate_pos = Coordinate { row: 1, col: 2 };
-        assert!(matches!(warehouse.get_object_at(&crate_pos), Some(GameObject::SingleCrate(_))));
-        
-        // Check wall positions
-        for row in 0..3 {
-            for col in 0..5 {
-                let pos = Coordinate { row, col };
-                if row == 0 || row == 2 || col == 0 || col == 4 {
-                    assert!(matches!(warehouse.get_object_at(&pos), Some(GameObject::Wall(_))));
-                }
-            }
+        // Specific position checks
+        let wall_positions = [
+            Coordinate { row: 0, col: 0 },
+            Coordinate { row: 0, col: 1 },
+            Coordinate { row: 1, col: 0 },
+        ];
+        for pos in wall_positions {
+            assert_eq!(warehouse.grid.get(&pos), Some(&1), "Expected wall at {:?}", pos);
         }
+
+        // Empty space check
+        assert_eq!(warehouse.grid.get(&Coordinate { row: 1, col: 1 }), None, "Expected empty space at (1,1)");
+
+        // Crate check
+        assert!(warehouse.grid.get(&Coordinate { row: 1, col: 3 }).map_or(false, |&id| id >= 2), 
+            "Expected crate at (1,3)");
     }
 
     #[test]
-    fn test_robot_movement_empty_space() {
-        let input = "
-#####
-#@..#
-#####".trim();
-        let (mut warehouse, _) = Warehouse::parse(input);
+    fn test_small_example_gps() {
+        let input = "########
+#..O.O.#
+##@.O..#
+#...O..#
+#.#.O..#
+#...O..#
+#......#
+########
+
+<^^>>>vv<v>>v<<";
         
-        assert!(warehouse.execute_move(Direction::East));
-        assert_eq!(warehouse.robot_location, Coordinate { row: 1, col: 2 });
+        let mut warehouse = Warehouse::from_str(input);
+        
+        // Execute all commands
+        let commands = warehouse.commands.clone();
+        for command in commands {
+            warehouse.execute_move(command);
+        }
+        
+        assert_eq!(warehouse.calculate_gps(), 2028, "Final GPS sum mismatch");
     }
 
     #[test]
-    fn test_robot_blocked_by_wall() {
-        let input = "
-####
-#@.#
-####".trim();
-        let (mut warehouse, _) = Warehouse::parse(input);
+    fn test_small_example_layout() {
+        let input = "########
+#..O.O.#
+##@.O..#
+#...O..#
+#.#.O..#
+#...O..#
+#......#
+########
+
+<^^>>>vv<v>>v<<";
+
+        let expected_final_state = "\
+########
+#....OO#
+##.....#
+#.....O#
+#.#O@..#
+#...O..#
+#...O..#
+########
+";
         
-        assert!(!warehouse.execute_move(Direction::North));
-        assert_eq!(warehouse.robot_location, Coordinate { row: 1, col: 1 });
+        let mut warehouse = Warehouse::from_str(input);
+        
+        // Execute all commands
+        let commands = warehouse.commands.clone();
+        for command in commands {
+            warehouse.execute_move(command);
+        }
+        
+        assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
+            "\nExpected final state:\n{}\nActual final state:\n{}", 
+            expected_final_state, warehouse.warehouse_to_string());
     }
 
     #[test]
-    fn test_robot_push_single_crate() {
-        let input = "
-#####
-#@O.#
-#####".trim();
-        let (mut warehouse, _) = Warehouse::parse(input);
+    fn test_large_example_gps() {
+        let input = "##########
+#..O..O.O#
+#......O.#
+#.OO..O.O#
+#..O@..O.#
+#O#..O...#
+#O..O..O.#
+#.OO.O.OO#
+#....O...#
+##########
+
+<vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^>^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^";
+
+        let mut warehouse = Warehouse::from_str(input);
         
-        assert!(warehouse.execute_move(Direction::East));
-        // Check robot moved
-        assert_eq!(warehouse.robot_location, Coordinate { row: 1, col: 2 });
-        // Check crate moved
-        let crate_pos = Coordinate { row: 1, col: 3 };
-        assert!(matches!(warehouse.get_object_at(&crate_pos), Some(GameObject::SingleCrate(_))));
+        // Execute all commands
+        let commands = warehouse.commands.clone();
+        for command in commands {
+            warehouse.execute_move(command);
+        }
+        
+        assert_eq!(warehouse.calculate_gps(), 10092, "Final GPS sum mismatch");
     }
 
     #[test]
-    fn test_robot_push_crate_blocked() {
-        let input = "
-#####
-#@O##
-#####".trim();
-        let (mut warehouse, _) = Warehouse::parse(input);
+    fn test_large_example_layout() {
+        let input = "##########
+#..O..O.O#
+#......O.#
+#.OO..O.O#
+#..O@..O.#
+#O#..O...#
+#O..O..O.#
+#.OO.O.OO#
+#....O...#
+##########
+
+<vv>^<v^>v>^vv^v>v<>v^v<v<^vv<<<^><<><>>v<vvv<>^v^>^<<<><<v<<<v^vv^v>^vvv<<^>^v^^><<>>><>^<<><^vv^^<>vvv<>><^^v>^>vv<>v<<<<v<^v>^<^^>>>^<v<v><>vv>v^v^<>><>>>><^^>vv>v<^^^>>v^v^<^^>v^^>v^<^v>v<>>v^v^<v>v^^<^^vv<<<v<^>>^^^^>>>v^<>vvv^><v<<<>^^^vv^<vvv>^>v<^^^^v<>^>vvvv><>>v^<<^^^^^^><^><>>><>^^<<^^v>>><^<v>^<vv>>v>>>^v><>^v><<<<v>>v<v<v>vvv>^<><<>^><^>><>^v<><^vvv<^^<><v<<<<<><^v<<<><<<^^<v<^^^><^>>^<v^><<<^>>^v<v^v<v^>^>>^v>vv>^<<^v<>><<><<v<<v><>v<^vv<<<>^^v^>^^>>><<^v>>v^v><^^>>^<>vv^<><^^>^^^<><vvvvv^v<v<<>^v<v>v<<^><<><<><<<^^<<<^<<>><<><^^^>^^<>^>v<>^^>vv<^v^v<vv>^<><v<^v>^^^>>>^^vvv^>vvv<>>>^<^>>>>>^<<^v>^vvv<>^<><<v>v^^>>><<^^<>>^v^<v^vv<>v^<<>^<^v^v><^<<<><<^<v><v<>vv>>v><v^<vv<>v^<<^";
+
+        let expected_final_state = "\
+##########
+#.O.O.OOO#
+#........#
+#OO......#
+#OO@.....#
+#O#.....O#
+#O.....OO#
+#O.....OO#
+#OO....OO#
+##########
+";
+
+        let mut warehouse = Warehouse::from_str(input);
         
-        assert!(!warehouse.execute_move(Direction::East));
-        // Check neither robot nor crate moved
-        assert_eq!(warehouse.robot_location, Coordinate { row: 1, col: 1 });
-        let crate_pos = Coordinate { row: 1, col: 2 };
-        assert!(matches!(warehouse.get_object_at(&crate_pos), Some(GameObject::SingleCrate(_))));
+        // Execute all commands
+        let commands = warehouse.commands.clone();
+        for command in commands {
+            warehouse.execute_move(command);
+        }
+        
+        assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
+            "\nExpected final state:\n{}\nActual final state:\n{}", 
+            expected_final_state, warehouse.warehouse_to_string());
     }
 }
