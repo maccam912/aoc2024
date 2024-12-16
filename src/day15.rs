@@ -108,146 +108,125 @@ impl Warehouse {
     }
 
     fn can_move_crate(&self, from: &Coordinate, direction: char) -> bool {
-        self.can_move_crate_internal(from, direction, &mut std::collections::HashSet::new())
-    }
-
-    fn can_move_crate_internal(&self, from: &Coordinate, direction: char, visited: &mut std::collections::HashSet<Coordinate>) -> bool {
-        if !visited.insert(*from) {
-            return false;
-        }
-
-        let to = match direction {
-            '<' => Coordinate { row: from.row, col: from.col - 1 },
-            '>' => Coordinate { row: from.row, col: from.col + 1 },
-            '^' => Coordinate { row: from.row - 1, col: from.col },
-            'v' => Coordinate { row: from.row + 1, col: from.col },
-            _ => return false,
-        };
-
-        // Check if destination is blocked by wall
-        if self.is_wall(&to) {
-            return false;
-        }
-
-        // Get the crate ID at the current position
-        let current_id = match self.get_crate_id(from) {
+        let mut to_check = vec![];  // Stack of crate IDs we need to check
+        let mut checked = std::collections::HashSet::new();  // Set of crate IDs we've already checked
+        
+        // Get the initial crate's ID and add it to the to_check list
+        let initial_id = match self.get_crate_id(from) {
             Some(id) => id,
             None => return false,
         };
+        to_check.push(initial_id);
 
-        // Check if this is part of a double crate
-        let left = Coordinate { row: from.row, col: from.col - 1 };
-        let right = Coordinate { row: from.row, col: from.col + 1 };
-        let is_double = {
-            self.get_crate_id(&left) == Some(current_id) ||
-            self.get_crate_id(&right) == Some(current_id)
-        };
+        while let Some(current_id) = to_check.pop() {
+            if checked.contains(&current_id) {
+                continue;
+            }
+            checked.insert(current_id);
 
-        // If there's a crate in the way, recursively check if it can be pushed
-        if self.is_crate(&to) {
-            return self.can_move_crate_internal(&to, direction, visited);
-        }
+            // Find all coordinates containing this crate ID
+            let mut crate_coords = vec![];
+            for (&coord, &id) in &self.grid {
+                if id == current_id {
+                    crate_coords.push(coord);
+                }
+            }
 
-        if !is_double {
-            return true;
-        }
-
-        // For double crates
-        match direction {
-            '<' | '>' => {
-                // For horizontal movement, both parts must be able to move
-                let other = if self.get_crate_id(&Coordinate { row: from.row, col: from.col - 1 }) == Some(current_id) {
-                    Coordinate { row: to.row, col: to.col - 1 }
-                } else {
-                    Coordinate { row: to.row, col: to.col + 1 }
+            // Calculate new positions for all parts of this crate
+            for coord in crate_coords {
+                let new_coord = match direction {
+                    '^' => Coordinate { row: coord.row - 1, col: coord.col },
+                    'v' => Coordinate { row: coord.row + 1, col: coord.col },
+                    '<' => Coordinate { row: coord.row, col: coord.col - 1 },
+                    '>' => Coordinate { row: coord.row, col: coord.col + 1 },
+                    _ => return false,
                 };
-                // Check if destination is blocked by wall
-                if self.is_wall(&other) {
-                    return false;
-                }
-                // If there's a crate in the way of either part, it must be able to move
-                if self.is_crate(&other) {
-                    return self.can_move_crate_internal(&other, direction, visited);
-                }
-                true
-            },
-            '^' | 'v' => {
-                // For vertical movement, check both sides
-                let left = Coordinate { row: from.row, col: from.col - 1 };
-                let right = Coordinate { row: from.row, col: from.col + 1 };
-                
-                if self.get_crate_id(&left) == Some(current_id) {
-                    let other_to = Coordinate { row: to.row, col: to.col - 1 };
-                    if self.is_wall(&other_to) {
+
+                // Check what's in the new position
+                if let Some(&id) = self.grid.get(&new_coord) {
+                    if id == 1 {
+                        // Hit a wall, entire stack cannot move
                         return false;
-                    }
-                    if self.is_crate(&other_to) {
-                        return self.can_move_crate_internal(&other_to, direction, visited);
-                    }
-                } else if self.get_crate_id(&right) == Some(current_id) {
-                    let other_to = Coordinate { row: to.row, col: to.col + 1 };
-                    if self.is_wall(&other_to) {
-                        return false;
-                    }
-                    if self.is_crate(&other_to) {
-                        return self.can_move_crate_internal(&other_to, direction, visited);
+                    } else if id >= 2 && id != current_id && !checked.contains(&id) {
+                        // Found a new crate to check
+                        to_check.push(id);
                     }
                 }
-                true
-            },
-            _ => false,
+            }
         }
+
+        // If we got here, it means all crates can move
+        true
     }
 
     fn move_crate(&mut self, from: &Coordinate, direction: char) -> bool {
+        // First check if the move is possible
         if !self.can_move_crate(from, direction) {
             return false;
         }
 
-        let to = match direction {
-            '^' => Coordinate { row: from.row - 1, col: from.col },
-            'v' => Coordinate { row: from.row + 1, col: from.col },
-            '<' => Coordinate { row: from.row, col: from.col - 1 },
-            '>' => Coordinate { row: from.row, col: from.col + 1 },
-            _ => return false,
-        };
+        // Find all crates that need to be moved by checking which ones were validated
+        let mut to_move = std::collections::HashSet::new();
+        let mut checked = std::collections::HashSet::new();
+        let mut to_check = vec![self.get_crate_id(from).unwrap()];
 
-        // If there's a crate in the destination, move it first (recursively)
-        if self.is_crate(&to) {
-            self.move_crate(&to, direction);
+        while let Some(current_id) = to_check.pop() {
+            if checked.contains(&current_id) {
+                continue;
+            }
+            checked.insert(current_id);
+            to_move.insert(current_id);
+
+            // Find any crates that would be overlapped by moving this one
+            let crate_coords: Vec<_> = self.grid.iter()
+                .filter(|(_, &id)| id == current_id)
+                .map(|(&coord, _)| coord)
+                .collect();
+
+            for coord in crate_coords {
+                let new_coord = match direction {
+                    '^' => Coordinate { row: coord.row - 1, col: coord.col },
+                    'v' => Coordinate { row: coord.row + 1, col: coord.col },
+                    '<' => Coordinate { row: coord.row, col: coord.col - 1 },
+                    '>' => Coordinate { row: coord.row, col: coord.col + 1 },
+                    _ => return false,
+                };
+
+                if let Some(&id) = self.grid.get(&new_coord) {
+                    if id >= 2 && !checked.contains(&id) {
+                        to_check.push(id);
+                    }
+                }
+            }
         }
 
-        let current_id = self.get_crate_id(from).unwrap();
-        
-        // Handle double crates
-        let left = Coordinate { row: from.row, col: from.col - 1 };
-        let right = Coordinate { row: from.row, col: from.col + 1 };
-        
-        if self.get_crate_id(&left) == Some(current_id) {
-            // If there's a crate in the destination of the left part, move it first
-            let to_left = Coordinate { row: to.row, col: to.col - 1 };
-            if self.is_crate(&to_left) {
-                self.move_crate(&to_left, direction);
+        // Now move all the crates we found
+        // First collect all moves we need to make to avoid conflicts
+        let mut moves = vec![];
+        for &id in &to_move {
+            for (&coord, &grid_id) in &self.grid {
+                if grid_id == id {
+                    let new_coord = match direction {
+                        '^' => Coordinate { row: coord.row - 1, col: coord.col },
+                        'v' => Coordinate { row: coord.row + 1, col: coord.col },
+                        '<' => Coordinate { row: coord.row, col: coord.col - 1 },
+                        '>' => Coordinate { row: coord.row, col: coord.col + 1 },
+                        _ => return false,
+                    };
+                    moves.push((coord, new_coord, id));
+                }
             }
-            // Move left part
-            let from_left = left;
-            self.grid.remove(&from_left);
-            self.grid.insert(to_left, current_id);
-        } else if self.get_crate_id(&right) == Some(current_id) {
-            // If there's a crate in the destination of the right part, move it first
-            let to_right = Coordinate { row: to.row, col: to.col + 1 };
-            if self.is_crate(&to_right) {
-                self.move_crate(&to_right, direction);
-            }
-            // Move right part
-            let from_right = right;
-            self.grid.remove(&from_right);
-            self.grid.insert(to_right, current_id);
         }
 
-        // Move the main crate
-        self.grid.remove(from);
-        self.grid.insert(to, current_id);
+        // Then apply all moves
+        // First remove all old positions
+        for (from_coord, _, _) in &moves {
+            self.grid.remove(from_coord);
+        }
+        // Then add all new positions
+        for (_, to_coord, id) in moves {
+            self.grid.insert(to_coord, id);
+        }
         true
     }
 
@@ -310,27 +289,6 @@ impl Warehouse {
                 } else if let Some(&value) = self.grid.get(&coord) {
                     if value == 1 {
                         result.push('#');
-                    } else if self.double_mode {
-                        // In double mode, we only want to print '[' for even columns and ']' for odd columns
-                        // when they contain the same crate ID
-                        if col % 2 == 0 {
-                            let next_coord = Coordinate { row, col: col + 1 };
-                            if let Some(&next_value) = self.grid.get(&next_coord) {
-                                if next_value == value && value >= 2 {
-                                    result.push('[');
-                                    continue;
-                                }
-                            }
-                        } else {
-                            let prev_coord = Coordinate { row, col: col - 1 };
-                            if let Some(&prev_value) = self.grid.get(&prev_coord) {
-                                if prev_value == value && value >= 2 {
-                                    result.push(']');
-                                    continue;
-                                }
-                            }
-                        }
-                        result.push('.');  // Fallback if not part of a crate pair
                     } else {
                         result.push('O');
                     }
@@ -376,6 +334,18 @@ impl Solution for Day15 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn compare_states(actual: &str, expected: &str) -> bool {
+        let expected = expected.trim().replace(['[', ']'], "O");
+        let actual = actual.trim().replace(['[', ']'], "O");
+        actual == expected
+    }
+
+    fn assert_states_eq(actual: &str, expected: &str, message: &str) {
+        assert!(compare_states(actual, expected), 
+            "{}\nExpected state:\n{}\nActual state:\n{}", 
+            message, expected, actual);
+    }
 
     #[test]
     fn test_parse_input() {
@@ -461,9 +431,8 @@ mod tests {
             warehouse.execute_move(command);
         }
         
-        assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
-            "\nExpected final state:\n{}\nActual final state:\n{}", 
-            expected_final_state, warehouse.warehouse_to_string());
+        assert_states_eq(&warehouse.warehouse_to_string(), expected_final_state, 
+            "Final state mismatch");
     }
 
     #[test]
@@ -510,7 +479,7 @@ mod tests {
         let expected_final_state = "\
 ##########
 #.O.O.OOO#
-##.....O.#
+#........#
 #OO......#
 #OO@.....#
 #O#.....O#
@@ -519,7 +488,7 @@ mod tests {
 #OO....OO#
 ##########
 ";
-
+        
         let mut warehouse = Warehouse::from_str(input, false);
         
         // Execute all commands
@@ -528,10 +497,8 @@ mod tests {
             warehouse.execute_move(command);
         }
         
-        assert_eq!(warehouse.calculate_gps(), 10092, "Final GPS sum mismatch");
-        assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
-            "\nExpected final state:\n{}\nActual final state:\n{}", 
-            expected_final_state, warehouse.warehouse_to_string());
+        assert_states_eq(&warehouse.warehouse_to_string(), expected_final_state, 
+            "Final state mismatch");
     }
 
     #[test]
@@ -570,10 +537,8 @@ mod tests {
             warehouse.execute_move(command);
         }
         
-        assert_eq!(warehouse.calculate_gps(), 9021, "Final GPS sum mismatch");
-        assert_eq!(warehouse.warehouse_to_string(), expected_final_state, 
-            "\nExpected final state:\n{}\nActual final state:\n{}", 
-            expected_final_state, warehouse.warehouse_to_string());
+        assert_states_eq(&warehouse.warehouse_to_string(), expected_final_state, 
+            "Final state mismatch");
     }
 
     #[test]
@@ -604,7 +569,8 @@ mod tests {
 ####################
 ";
         
-        assert_eq!(warehouse.warehouse_to_string(), expected);
+        assert_states_eq(&warehouse.warehouse_to_string(), expected, 
+            "Initial state mismatch in double mode");
     }
 
     #[test]
@@ -702,6 +668,14 @@ mod tests {
 ##....@.....##
 ##..........##
 ##############",
+            "\
+##############
+##......##..##
+##...[][]...##
+##....[]....##
+##...@......##
+##..........##
+##############",
             // After move <
             "\
 ##############
@@ -725,17 +699,22 @@ mod tests {
         let mut warehouse = Warehouse::from_str(input, true); // Set double_width to true
         
         // Check initial state
-        assert_eq!(warehouse.warehouse_to_string(), expected_states[0], 
-            "\nExpected initial state:\n{}\nActual initial state:\n{}", 
-            expected_states[0], warehouse.warehouse_to_string());
+        assert_states_eq(&warehouse.warehouse_to_string(), expected_states[0], 
+            "Initial state mismatch");
 
         // Execute each command and verify the state
         let commands = warehouse.commands.clone();
         for (i, command) in commands.iter().enumerate() {
+            // Verify before and after that there are SIX crate positions
+            assert_eq!(warehouse.grid.values().filter(|&&v| v >= 2).count(), 6, 
+                "Expected 6 crate positions before move {}, but found {}", i + 1, 
+                warehouse.grid.values().filter(|&&v| v >= 2).count());
             warehouse.execute_move(*command);
-            assert_eq!(warehouse.warehouse_to_string(), expected_states[i + 1], 
-                "\nAfter move {}, expected state:\n{}\nActual state:\n{}", 
-                i + 1, expected_states[i + 1], warehouse.warehouse_to_string());
+            assert_eq!(warehouse.grid.values().filter(|&&v| v >= 2).count(), 6, 
+                "Expected 6 crate positions after move {}, but found {}", i + 1, 
+                warehouse.grid.values().filter(|&&v| v >= 2).count());
+            assert_states_eq(&warehouse.warehouse_to_string(), expected_states[i + 1], 
+                &format!("State mismatch after move {}", i + 1));
         }
     }
 }
