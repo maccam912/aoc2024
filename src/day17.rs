@@ -113,8 +113,44 @@ impl Solution for Day17 {
             .join(",")
     }
 
-    fn part2(&self, _input: &str) -> String {
-        "Not implemented".to_string()
+    fn part2(&self, input: &str) -> String {
+        let mut lines = input.lines();
+        lines.next(); // Skip original A value
+        let reg_b = lines.next().unwrap()
+            .strip_prefix("Register B: ").unwrap()
+            .parse().unwrap();
+        let reg_c = lines.next().unwrap()
+            .strip_prefix("Register C: ").unwrap()
+            .parse().unwrap();
+        
+        // Skip empty line and get program
+        lines.next();
+        let program_line = lines.next().unwrap()
+            .strip_prefix("Program: ").unwrap();
+        let program: Vec<u8> = program_line
+            .split(',')
+            .map(|n| n.parse().unwrap())
+            .collect();
+        
+        let target: Vec<u8> = program.clone();
+        let mut reg_a = 0i64;
+        
+        loop {
+            let mut computer = Computer::new(program.clone(), reg_a, reg_b, reg_c);
+            computer.run();
+            
+            if computer.output.len() == target.len() && computer.output == target {
+                break;
+            }
+            reg_a += 1;
+            
+            // Temporary safety check for development
+            if reg_a > 1_000_000_000 {
+                return "Exceeded maximum iterations".to_string();
+            }
+        }
+        
+        reg_a.to_string()
     }
 }
 
@@ -159,5 +195,16 @@ Register C: 0
 
 Program: 0,1,5,4,3,0";
         assert_eq!(Day17.part1(input), "4,6,3,5,6,3,5,2,1,0");
+    }
+
+    #[test]
+    fn test_part2_example() {
+        let input = "\
+Register A: 2024
+Register B: 0
+Register C: 0
+
+Program: 0,3,5,4,3,0";
+        assert_eq!(Day17.part2(input), "117440");
     }
 }
