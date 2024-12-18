@@ -1,5 +1,14 @@
 use crate::Solution;
 
+#[derive(Debug, Clone)]
+struct State {
+    reg_a: i64,
+    reg_b: i64,
+    reg_c: i64,
+    ip: usize,
+    output: Vec<u8>,
+}
+
 #[derive(Debug, Default)]
 struct Computer {
     reg_a: i64,
@@ -9,10 +18,20 @@ struct Computer {
     program: Vec<u8>,
     output: Vec<u8>,
     debug: bool,
+    history: Vec<State>,
+    reverse_mode: bool,
 }
 
 impl Computer {
     fn new(program: Vec<u8>, reg_a: i64, reg_b: i64, reg_c: i64) -> Self {
+        let initial_state = State {
+            reg_a,
+            reg_b,
+            reg_c,
+            ip: 0,
+            output: Vec::new(),
+        };
+        
         Self {
             reg_a,
             reg_b,
@@ -21,6 +40,34 @@ impl Computer {
             program,
             output: Vec::new(),
             debug: true,
+            history: vec![initial_state],
+            reverse_mode: false,
+        }
+    }
+
+    fn save_state(&mut self) {
+        let state = State {
+            reg_a: self.reg_a,
+            reg_b: self.reg_b,
+            reg_c: self.reg_c,
+            ip: self.ip,
+            output: self.output.clone(),
+        };
+        self.history.push(state);
+    }
+
+    fn restore_previous_state(&mut self) -> bool {
+        if self.history.len() > 1 {
+            self.history.pop(); // Remove current state
+            let prev_state = self.history.last().unwrap();
+            self.reg_a = prev_state.reg_a;
+            self.reg_b = prev_state.reg_b;
+            self.reg_c = prev_state.reg_c;
+            self.ip = prev_state.ip;
+            self.output = prev_state.output.clone();
+            true
+        } else {
+            false
         }
     }
 
@@ -62,8 +109,7 @@ impl Computer {
             ip_display[self.ip + 1] = '>';
         }
 
-        // Display program with instruction pointer
-        println!("\nProgram:");
+        println!("\nProgram: {} Mode", if self.reverse_mode { "REVERSE" } else { "FORWARD" });
         for i in (0..self.program.len()).step_by(2) {
             if i + 1 < self.program.len() {
                 println!("{}{} {} {} \t# {}", 
@@ -76,13 +122,11 @@ impl Computer {
             }
         }
 
-        // Display registers in binary
         println!("\nRegisters:");
         println!("A: {:032b} ({})", self.reg_a as u32, self.reg_a);
         println!("B: {:032b} ({})", self.reg_b as u32, self.reg_b);
         println!("C: {:032b} ({})", self.reg_c as u32, self.reg_c);
         
-        // Display output
         println!("\nOutput so far:");
         if self.output.is_empty() {
             println!("(none)");
@@ -90,7 +134,8 @@ impl Computer {
             println!("{:?}", self.output);
         }
         
-        println!("\nPress ENTER to continue...");
+        println!("\nPress ENTER to {}, 'r' to toggle reverse mode...", 
+            if self.reverse_mode { "step backward" } else { "continue" });
     }
 
     fn run(&mut self) {
@@ -100,14 +145,29 @@ impl Computer {
             if self.debug {
                 self.display_state();
                 
-                // Wait for enter key
+                // Read a line of input
                 let mut buffer = String::new();
                 io::stdin().read_line(&mut buffer).unwrap();
+                
+                // Check for reverse mode toggle
+                if buffer.trim() == "r" {
+                    self.reverse_mode = !self.reverse_mode;
+                    continue;
+                }
+                
+                // Handle reverse mode
+                if self.reverse_mode {
+                    if !self.restore_previous_state() {
+                        println!("Cannot go back further!");
+                        self.reverse_mode = false;
+                    }
+                    continue;
+                }
             }
 
             let opcode = self.program[self.ip];
             let operand = self.program[self.ip + 1];
-            self.ip += 2; 
+            self.ip += 2;
 
             match opcode {
                 0 => { // adv
@@ -141,6 +201,10 @@ impl Computer {
                     self.reg_c = self.reg_a / (1 << power);
                 }
                 _ => panic!("Invalid opcode"),
+            }
+            
+            if self.debug {
+                self.save_state();
             }
         }
     }
