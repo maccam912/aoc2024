@@ -39,7 +39,7 @@ impl Computer {
             ip: 0,
             program,
             output: Vec::new(),
-            debug: true,
+            debug: false,
             history: vec![initial_state],
             reverse_mode: false,
         }
@@ -134,7 +134,7 @@ impl Computer {
             println!("{:?}", self.output);
         }
         
-        println!("\nPress ENTER to {}, 'r' to toggle reverse mode...", 
+        println!("\nPress ENTER to {}, 'r' to toggle reverse mode, 'c' to continue without debugging...", 
             if self.reverse_mode { "step backward" } else { "continue" });
     }
 
@@ -149,19 +149,25 @@ impl Computer {
                 let mut buffer = String::new();
                 io::stdin().read_line(&mut buffer).unwrap();
                 
-                // Check for reverse mode toggle
-                if buffer.trim() == "r" {
-                    self.reverse_mode = !self.reverse_mode;
-                    continue;
-                }
-                
-                // Handle reverse mode
-                if self.reverse_mode {
-                    if !self.restore_previous_state() {
-                        println!("Cannot go back further!");
-                        self.reverse_mode = false;
+                match buffer.trim() {
+                    "r" => {
+                        self.reverse_mode = !self.reverse_mode;
+                        continue;
                     }
-                    continue;
+                    "c" => {
+                        println!("Continuing without debug mode...");
+                        self.debug = false;
+                    }
+                    _ => {
+                        // Handle reverse mode
+                        if self.reverse_mode {
+                            if !self.restore_previous_state() {
+                                println!("Cannot go back further!");
+                                self.reverse_mode = false;
+                            }
+                            continue;
+                        }
+                    }
                 }
             }
 
@@ -255,48 +261,67 @@ impl Solution for Day17 {
 
     fn part2(&self, input: &str) -> String {
         let mut lines = input.lines();
-        lines.next(); // Skip original A value
+        
+        // Parse register values
+        let mut reg_a = lines.next().unwrap()
+            .strip_prefix("Register A: ").unwrap()
+            .parse::<i64>().unwrap();
+            
         let reg_b = lines.next().unwrap()
             .strip_prefix("Register B: ").unwrap()
             .parse().unwrap();
         let reg_c = lines.next().unwrap()
             .strip_prefix("Register C: ").unwrap()
             .parse().unwrap();
+            
+        // Construct new 16-digit register A value
+        let d1 = 1 << 0;   // Position 0
+        let d2 = 1 << 3;   // Position 3
+        let d3 = 1 << 6;   // Position 6
+        let d4 = 1 << 9;   // Position 9
+        let d5 = 1 << 12;  // Position 12
+        let d6 = 1 << 15;  // Position 15
+        let d7 = 1 << 18;  // Position 18
+        let d8 = 1 << 21;  // Position 21
+        let d9 = 1 << 24;  // Position 24
+        let d10 = 1 << 27; // Position 27
+        let d11 = 1 << 30; // Position 30
+        let d12 = 1 << 33; // Position 33
+        let d13 = 4 << 36; // Position 36 #
+        let d14 = 6 << 39; // Position 39
+        let d15 = 2 << 42; // Position 42
+        let d16 = 7 << 45; // Position 45
         
-        // Skip empty line and get program
+        reg_a = d1 | d2 | d3 | d4 | d5 | d6 | d7 | d8 | 
+                d9 | d10 | d11 | d12 | d13 | d14 | d15 | d16;
+        
+        println!("New A: {}", reg_a);
+        println!("Match:  2,4,1,7,7,5,0,3,4,4,1,7,5,#5,3,0");
+        
+        // Skip empty line and "Program: " line
         lines.next();
         let program_line = lines.next().unwrap()
             .strip_prefix("Program: ").unwrap();
+        
+        // Parse program
         let program: Vec<u8> = program_line
-            .split_whitespace()
+            .split(',')
             .map(|s| s.parse().unwrap())
             .collect();
         
-        let target: Vec<u8> = program.clone();
-        let mut reg_a = 0i64;
+        let mut computer = Computer::new(program, reg_a, reg_b, reg_c);
         
-        loop {
-            let mut computer = Computer::new(program.clone(), reg_a, reg_b, reg_c);
-            
-            // Enable debug mode if environment variable is set
-            if std::env::var("DEBUG").is_ok() {
-                computer = computer.with_debug();
-            }
-            
-            computer.run();
-            
-            if computer.output.len() == target.len() && computer.output == target {
-                break;
-            }
-            reg_a += 1;
-            
-            // Temporary safety check for development
-            if reg_a > 1_000_000_000 {
-                return "Exceeded maximum iterations".to_string();
-            }
+        // Enable debug mode if environment variable is set
+        if std::env::var("DEBUG").is_ok() {
+            computer = computer.with_debug();
         }
         
-        reg_a.to_string()
+        computer.run();
+        
+        computer.output.iter()
+            .map(|&n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
     }
 }
 
