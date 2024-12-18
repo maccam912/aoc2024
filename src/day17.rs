@@ -8,6 +8,7 @@ struct Computer {
     ip: usize,
     program: Vec<u8>,
     output: Vec<u8>,
+    debug: bool,
 }
 
 impl Computer {
@@ -19,7 +20,13 @@ impl Computer {
             ip: 0,
             program,
             output: Vec::new(),
+            debug: true,
         }
+    }
+
+    fn with_debug(mut self) -> Self {
+        self.debug = true;
+        self
     }
 
     fn get_combo_value(&self, operand: u8) -> i64 {
@@ -33,8 +40,71 @@ impl Computer {
         }
     }
 
+    fn get_opcode_name(&self, opcode: u8) -> &'static str {
+        match opcode {
+            0 => "adv (divide reg_a by 2^operand)",
+            1 => "bxl (xor reg_b with operand)",
+            2 => "bst (set reg_b to operand mod 8)",
+            3 => "jnz (jump to operand if reg_a != 0)",
+            4 => "bxc (xor reg_b with reg_c)",
+            5 => "out (output operand mod 8)",
+            6 => "bdv (set reg_b to reg_a / 2^operand)",
+            7 => "cdv (set reg_c to reg_a / 2^operand)",
+            _ => "invalid opcode",
+        }
+    }
+
+    fn display_state(&self) {
+        // Convert instruction pointer to arrow display
+        let mut ip_display = vec![' '; self.program.len()];
+        if self.ip + 1 < self.program.len() {
+            ip_display[self.ip] = '>';
+            ip_display[self.ip + 1] = '>';
+        }
+
+        // Display program with instruction pointer
+        println!("\nProgram:");
+        for i in (0..self.program.len()).step_by(2) {
+            if i + 1 < self.program.len() {
+                println!("{}{} {} {} \t# {}", 
+                    ip_display[i], 
+                    ip_display[i+1],
+                    self.program[i],
+                    self.program[i+1],
+                    self.get_opcode_name(self.program[i])
+                );
+            }
+        }
+
+        // Display registers in binary
+        println!("\nRegisters:");
+        println!("A: {:032b} ({})", self.reg_a as u32, self.reg_a);
+        println!("B: {:032b} ({})", self.reg_b as u32, self.reg_b);
+        println!("C: {:032b} ({})", self.reg_c as u32, self.reg_c);
+        
+        // Display output
+        println!("\nOutput so far:");
+        if self.output.is_empty() {
+            println!("(none)");
+        } else {
+            println!("{:?}", self.output);
+        }
+        
+        println!("\nPress ENTER to continue...");
+    }
+
     fn run(&mut self) {
+        use std::io::{self, Read};
+
         while self.ip + 1 < self.program.len() {
+            if self.debug {
+                self.display_state();
+                
+                // Wait for enter key
+                let mut buffer = String::new();
+                io::stdin().read_line(&mut buffer).unwrap();
+            }
+
             let opcode = self.program[self.ip];
             let operand = self.program[self.ip + 1];
             self.ip += 2; 
@@ -101,10 +171,16 @@ impl Solution for Day17 {
         // Parse program
         let program: Vec<u8> = program_line
             .split(',')
-            .map(|n| n.parse().unwrap())
+            .map(|s| s.parse().unwrap())
             .collect();
-        
+
         let mut computer = Computer::new(program, reg_a, reg_b, reg_c);
+        
+        // Enable debug mode if environment variable is set
+        if std::env::var("DEBUG").is_ok() {
+            computer = computer.with_debug();
+        }
+        
         computer.run();
         
         computer.output.iter()
@@ -128,8 +204,8 @@ impl Solution for Day17 {
         let program_line = lines.next().unwrap()
             .strip_prefix("Program: ").unwrap();
         let program: Vec<u8> = program_line
-            .split(',')
-            .map(|n| n.parse().unwrap())
+            .split_whitespace()
+            .map(|s| s.parse().unwrap())
             .collect();
         
         let target: Vec<u8> = program.clone();
@@ -137,6 +213,12 @@ impl Solution for Day17 {
         
         loop {
             let mut computer = Computer::new(program.clone(), reg_a, reg_b, reg_c);
+            
+            // Enable debug mode if environment variable is set
+            if std::env::var("DEBUG").is_ok() {
+                computer = computer.with_debug();
+            }
+            
             computer.run();
             
             if computer.output.len() == target.len() && computer.output == target {
