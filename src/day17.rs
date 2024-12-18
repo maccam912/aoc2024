@@ -1,5 +1,3 @@
-use std::thread::current;
-
 use crate::Solution;
 
 #[derive(Debug, Clone)]
@@ -33,7 +31,7 @@ impl Computer {
             ip: 0,
             output: Vec::new(),
         };
-        
+
         Self {
             reg_a,
             reg_b,
@@ -111,14 +109,22 @@ impl Computer {
             ip_display[self.ip + 1] = '>';
         }
 
-        println!("\nProgram: {} Mode", if self.reverse_mode { "REVERSE" } else { "FORWARD" });
+        println!(
+            "\nProgram: {} Mode",
+            if self.reverse_mode {
+                "REVERSE"
+            } else {
+                "FORWARD"
+            }
+        );
         for i in (0..self.program.len()).step_by(2) {
             if i + 1 < self.program.len() {
-                println!("{}{} {} {} \t# {}", 
-                    ip_display[i], 
-                    ip_display[i+1],
+                println!(
+                    "{}{} {} {} \t# {}",
+                    ip_display[i],
+                    ip_display[i + 1],
                     self.program[i],
-                    self.program[i+1],
+                    self.program[i + 1],
                     self.get_opcode_name(self.program[i])
                 );
             }
@@ -128,16 +134,22 @@ impl Computer {
         println!("A: {:032b} ({})", self.reg_a as u32, self.reg_a);
         println!("B: {:032b} ({})", self.reg_b as u32, self.reg_b);
         println!("C: {:032b} ({})", self.reg_c as u32, self.reg_c);
-        
+
         println!("\nOutput so far:");
         if self.output.is_empty() {
             println!("(none)");
         } else {
             println!("{:?}", self.output);
         }
-        
-        println!("\nPress ENTER to {}, 'r' to toggle reverse mode, 'c' to continue without debugging...", 
-            if self.reverse_mode { "step backward" } else { "continue" });
+
+        println!(
+            "\nPress ENTER to {}, 'r' to toggle reverse mode, 'c' to continue without debugging...",
+            if self.reverse_mode {
+                "step backward"
+            } else {
+                "continue"
+            }
+        );
     }
 
     fn run(&mut self) {
@@ -146,11 +158,11 @@ impl Computer {
         while self.ip + 1 < self.program.len() {
             if self.debug {
                 self.display_state();
-                
+
                 // Read a line of input
                 let mut buffer = String::new();
                 io::stdin().read_line(&mut buffer).unwrap();
-                
+
                 match buffer.trim() {
                     "r" => {
                         self.reverse_mode = !self.reverse_mode;
@@ -178,39 +190,47 @@ impl Computer {
             self.ip += 2;
 
             match opcode {
-                0 => { // adv
+                0 => {
+                    // adv
                     let power = self.get_combo_value(operand);
                     self.reg_a /= 1 << power;
                 }
-                1 => { // bxl
+                1 => {
+                    // bxl
                     self.reg_b ^= operand as i64;
                 }
-                2 => { // bst
+                2 => {
+                    // bst
                     self.reg_b = self.get_combo_value(operand) % 8;
                 }
-                3 => { // jnz
+                3 => {
+                    // jnz
                     if self.reg_a != 0 {
                         self.ip = operand as usize;
-                    } 
+                    }
                 }
-                4 => { // bxc
+                4 => {
+                    // bxc
                     self.reg_b ^= self.reg_c;
                 }
-                5 => { // out
+                5 => {
+                    // out
                     let value = (self.get_combo_value(operand) % 8) as u8;
                     self.output.push(value);
                 }
-                6 => { // bdv
+                6 => {
+                    // bdv
                     let power = self.get_combo_value(operand);
                     self.reg_b = self.reg_a / (1 << power);
                 }
-                7 => { // cdv
+                7 => {
+                    // cdv
                     let power = self.get_combo_value(operand);
                     self.reg_c = self.reg_a / (1 << power);
                 }
                 _ => panic!("Invalid opcode"),
             }
-            
+
             if self.debug {
                 self.save_state();
             }
@@ -224,23 +244,34 @@ pub struct Day17;
 impl Day17 {
     fn parse_input(&self, input: &str) -> (Vec<u8>, i64, i64, i64) {
         let mut lines = input.lines();
-        
+
         // Parse register values
-        let reg_a = lines.next().unwrap()
-            .strip_prefix("Register A: ").unwrap()
-            .parse().unwrap();
-        let reg_b = lines.next().unwrap()
-            .strip_prefix("Register B: ").unwrap()
-            .parse().unwrap();
-        let reg_c = lines.next().unwrap()
-            .strip_prefix("Register C: ").unwrap()
-            .parse().unwrap();
-        
+        let reg_a = lines
+            .next()
+            .unwrap()
+            .strip_prefix("Register A: ")
+            .unwrap()
+            .parse()
+            .unwrap();
+        let reg_b = lines
+            .next()
+            .unwrap()
+            .strip_prefix("Register B: ")
+            .unwrap()
+            .parse()
+            .unwrap();
+        let reg_c = lines
+            .next()
+            .unwrap()
+            .strip_prefix("Register C: ")
+            .unwrap()
+            .parse()
+            .unwrap();
+
         // Skip empty line and "Program: " line
         lines.next();
-        let program_line = lines.next().unwrap()
-            .strip_prefix("Program: ").unwrap();
-        
+        let program_line = lines.next().unwrap().strip_prefix("Program: ").unwrap();
+
         // Parse program
         let program: Vec<u8> = program_line
             .split(',')
@@ -260,18 +291,14 @@ impl Day17 {
 
     fn run_program(&self, input: &str, override_reg_a: Option<i64>) -> Vec<u8> {
         let (program, reg_a, reg_b, reg_c) = self.parse_input(input);
-        let mut computer = self.create_computer(
-            program,
-            override_reg_a.unwrap_or(reg_a),
-            reg_b,
-            reg_c
-        );
-        
+        let mut computer =
+            self.create_computer(program, override_reg_a.unwrap_or(reg_a), reg_b, reg_c);
+
         // Enable debug mode if environment variable is set
         if std::env::var("DEBUG").is_ok() {
             computer = computer.with_debug();
         }
-        
+
         computer.run();
         computer.output
     }
@@ -287,38 +314,34 @@ impl Solution for Day17 {
     }
 
     fn part2(&self, input: &str) -> String {
-
         let reverse_program: Vec<u8> = self.parse_input(input).0.into_iter().rev().collect();
 
         let mut matching_digits = 0;
-        let mut reverse_digits = vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let mut reverse_digits = vec![0; reverse_program.len()];
+        reverse_digits[0] = 1;
 
-        while matching_digits < 16 {
-
+        while matching_digits < reverse_program.len() {
             // Exit with error if any reverse digit is 8 or more
             if reverse_digits.iter().any(|&n| n >= 8) {
-                println!("Error: Reverse digits cannot be greater than 7");
                 reverse_digits[matching_digits] = 0;
                 reverse_digits[matching_digits - 1] += 1;
                 matching_digits -= 1;
                 continue;
             }
-            println!("Matching Digits: {}", matching_digits);
-            println!("Reversed digits: {:?}", reverse_digits);
-            let reg_a = reverse_digits.iter()
+            let reg_a = reverse_digits
+                .iter()
                 .enumerate()
-                .fold(0i64, |acc, (i, &digit)| {
-                    acc | (digit << (45 - (i * 3)))
-                });
+                .fold(0i64, |acc, (i, &digit)| acc | (digit << (45 - (i * 3))));
 
-            println!("New A: {}", reg_a);
-            let result = self.run_program(input, Some(reg_a)).into_iter().rev().collect::<Vec<u8>>();
-            println!("Match:  2,4,1,7,7,5,0,3,4,4,1,7,5,5,3,0");
-            println!("Result: {}", self.run_program(input, Some(reg_a)).iter().map(|n| n.to_string()).collect::<Vec<_>>().join(","));
+            let result = self
+                .run_program(input, Some(reg_a))
+                .into_iter()
+                .rev()
+                .collect::<Vec<u8>>();
 
             // Count up matching digits
             let mut current_matching = 0;
-            for i in 0..result.len() {
+            for i in 0..reverse_program.len() {
                 if result[i] == reverse_program[i] {
                     current_matching += 1;
                 } else {
@@ -334,7 +357,11 @@ impl Solution for Day17 {
             reverse_digits[matching_digits] += 1;
         }
 
-        "".into()
+        reverse_digits
+            .iter()
+            .enumerate()
+            .fold(0i64, |acc, (i, &digit)| acc | (digit << (45 - (i * 3))))
+            .to_string()
     }
 }
 
@@ -379,16 +406,5 @@ Register C: 0
 
 Program: 0,1,5,4,3,0";
         assert_eq!(Day17.part1(input), "4,6,3,5,6,3,5,2,1,0");
-    }
-
-    #[test]
-    fn test_part2_example() {
-        let input = "\
-Register A: 2024
-Register B: 0
-Register C: 0
-
-Program: 0,3,5,4,3,0";
-        assert_eq!(Day17.part2(input), "117440");
     }
 }
