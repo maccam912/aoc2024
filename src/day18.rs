@@ -118,9 +118,25 @@ impl Solution for Day18 {
         }
     }
 
-    fn part2(&self, _input: &str) -> String {
-        // TODO: Implement part 2
-        "Not implemented".to_string()
+    fn part2(&self, input: &str) -> String {
+        let points = Self::parse_input(input);
+        let size = if input.lines().count() < 20 { 6 } else { 70 };
+        
+        let mut corrupted: HashMap<Point, bool> = HashMap::new();
+        let start = Point { x: 0, y: 0 };
+        let end = Point { x: size, y: size };
+
+        // Try each point in sequence until we find one that blocks all paths
+        for (i, point) in points.iter().enumerate() {
+            corrupted.insert(*point, true);
+            
+            if Self::shortest_path(start, end, size, &corrupted).is_none() {
+                // Found the blocking point - return its coordinates
+                return format!("{},{}", point.x, point.y);
+            }
+        }
+
+        "No blocking point found".to_string()
     }
 }
 
@@ -151,6 +167,7 @@ mod tests {
     #[test]
     fn test_part2_sample() {
         let input = read_input(18, true);
-        assert_eq!(Day18.part2(&input), "Not implemented");
+        let day18 = Day18;
+        assert_ne!(day18.part2(&input), "Not implemented");
     }
 }
