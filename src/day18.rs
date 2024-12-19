@@ -17,7 +17,9 @@ struct State {
 
 impl Ord for State {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.cost.cmp(&self.cost)
+        other
+            .cost
+            .cmp(&self.cost)
             .then_with(|| self.position.x.cmp(&other.position.x))
             .then_with(|| self.position.y.cmp(&other.position.y))
     }
@@ -31,7 +33,8 @@ impl PartialOrd for State {
 
 impl Day18 {
     fn parse_input(input: &str) -> Vec<Point> {
-        input.lines()
+        input
+            .lines()
             .map(|line| {
                 let mut parts = line.split(',');
                 let x = parts.next().unwrap().trim().parse().unwrap();
@@ -41,7 +44,11 @@ impl Day18 {
             .collect()
     }
 
-    fn get_neighbors(point: Point, size: i32, corrupted: &HashMap<Point, bool>) -> Vec<(Point, i32)> {
+    fn get_neighbors(
+        point: Point,
+        size: i32,
+        corrupted: &HashMap<Point, bool>,
+    ) -> Vec<(Point, i32)> {
         let dirs = [(0, 1), (1, 0), (0, -1), (-1, 0)];
         dirs.iter()
             .map(|(dx, dy)| Point {
@@ -55,7 +62,12 @@ impl Day18 {
             .collect()
     }
 
-    fn shortest_path(start: Point, end: Point, size: i32, corrupted: &HashMap<Point, bool>) -> Option<i32> {
+    fn shortest_path(
+        start: Point,
+        end: Point,
+        size: i32,
+        corrupted: &HashMap<Point, bool>,
+    ) -> Option<i32> {
         let mut distances: HashMap<Point, i32> = HashMap::new();
         let mut heap = BinaryHeap::new();
 
@@ -101,13 +113,10 @@ impl Solution for Day18 {
     fn part1(&self, input: &str) -> String {
         let points = Self::parse_input(input);
         let size = if input.lines().count() < 20 { 6 } else { 70 }; // Use 6 for sample, 70 for real input
-        
+
         // Take only first 1024 points for part 1
-        let corrupted: HashMap<Point, bool> = points
-            .into_iter()
-            .take(1024)
-            .map(|p| (p, true))
-            .collect();
+        let corrupted: HashMap<Point, bool> =
+            points.into_iter().take(1024).map(|p| (p, true)).collect();
 
         let start = Point { x: 0, y: 0 };
         let end = Point { x: size, y: size };
@@ -121,15 +130,15 @@ impl Solution for Day18 {
     fn part2(&self, input: &str) -> String {
         let points = Self::parse_input(input);
         let size = if input.lines().count() < 20 { 6 } else { 70 };
-        
+
         let mut corrupted: HashMap<Point, bool> = HashMap::new();
         let start = Point { x: 0, y: 0 };
         let end = Point { x: size, y: size };
 
         // Try each point in sequence until we find one that blocks all paths
-        for (i, point) in points.iter().enumerate() {
+        for (_, point) in points.iter().enumerate() {
             corrupted.insert(*point, true);
-            
+
             if Self::shortest_path(start, end, size, &corrupted).is_none() {
                 // Found the blocking point - return its coordinates
                 return format!("{},{}", point.x, point.y);
