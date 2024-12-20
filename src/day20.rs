@@ -1,5 +1,8 @@
 use crate::Solution;
 use std::collections::{HashSet, VecDeque};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use rayon::prelude::*;
 
 pub struct Day20;
 
@@ -134,12 +137,30 @@ impl Day20 {
     }
 
     fn find_long_shortcuts(grid: &[Vec<char>], path: &HashSet<Pos>, max_shortcut_length: i32) -> Vec<i32> {
-        let mut shortcuts = Vec::new();
         let path_points: Vec<_> = path.iter().collect();
+        let total_pairs = (path_points.len() * (path_points.len() - 1)) / 2;
+        let pairs_checked = Arc::new(AtomicUsize::new(0));
+        let progress_interval = total_pairs / 100; // Show progress every 1%
+        println!("Total point pairs to check: {}", total_pairs);
 
-        // For each pair of points on the normal path
-        for i in 0..path_points.len() {
-            for j in i + 1..path_points.len() {
+        // Create all pairs of indices
+        let pairs: Vec<_> = (0..path_points.len())
+            .flat_map(|i| ((i + 1)..path_points.len()).map(move |j| (i, j)))
+            .collect();
+
+        // Process pairs in parallel
+        let shortcuts: Vec<_> = pairs.par_iter()
+            .filter_map(|&(i, j)| {
+                let pairs_checked_ref = Arc::clone(&pairs_checked);
+                let current = pairs_checked_ref.fetch_add(1, Ordering::Relaxed);
+                if progress_interval > 0 && current % progress_interval == 0 {
+                    println!("Progress: {:.1}% ({}/{})", 
+                        (current as f64 / total_pairs as f64) * 100.0,
+                        current,
+                        total_pairs
+                    );
+                }
+
                 let start = *path_points[i];
                 let end = *path_points[j];
 
@@ -154,12 +175,18 @@ impl Day20 {
                     // If normal path is longer than manhattan distance, we found a shortcut
                     if normal_time > manhattan_dist {
                         let saved = normal_time - manhattan_dist;
-                        shortcuts.push(saved);
+                        Some(saved)
+                    } else {
+                        None
                     }
+                } else {
+                    None
                 }
-            }
-        }
+            })
+            .collect();
 
+        println!("Finished checking all {} pairs", total_pairs);
+        println!("Found {} shortcuts", shortcuts.len());
         shortcuts
     }
 }
