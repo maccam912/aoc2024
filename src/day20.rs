@@ -1,8 +1,8 @@
 use crate::Solution;
+use rayon::prelude::*;
 use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use rayon::prelude::*;
 
 pub struct Day20;
 
@@ -136,7 +136,11 @@ impl Day20 {
         shortcuts
     }
 
-    fn find_long_shortcuts(grid: &[Vec<char>], path: &HashSet<Pos>, max_shortcut_length: i32) -> Vec<i32> {
+    fn find_long_shortcuts(
+        grid: &[Vec<char>],
+        path: &HashSet<Pos>,
+        max_shortcut_length: i32,
+    ) -> Vec<i32> {
         let path_points: Vec<_> = path.iter().collect();
         let total_pairs = (path_points.len() * (path_points.len() - 1)) / 2;
         let pairs_checked = Arc::new(AtomicUsize::new(0));
@@ -149,12 +153,14 @@ impl Day20 {
             .collect();
 
         // Process pairs in parallel
-        let shortcuts: Vec<_> = pairs.par_iter()
+        let shortcuts: Vec<_> = pairs
+            .par_iter()
             .filter_map(|&(i, j)| {
                 let pairs_checked_ref = Arc::clone(&pairs_checked);
                 let current = pairs_checked_ref.fetch_add(1, Ordering::Relaxed);
                 if progress_interval > 0 && current % progress_interval == 0 {
-                    println!("Progress: {:.1}% ({}/{})", 
+                    println!(
+                        "Progress: {:.1}% ({}/{})",
                         (current as f64 / total_pairs as f64) * 100.0,
                         current,
                         total_pairs
@@ -166,12 +172,12 @@ impl Day20 {
 
                 // Calculate manhattan distance
                 let manhattan_dist = (end.row - start.row).abs() + (end.col - start.col).abs();
-                
+
                 // Only consider points that are within max_shortcut_length manhattan distance
                 if manhattan_dist <= max_shortcut_length {
                     // Calculate normal path length between these points
                     let normal_time = Self::find_normal_path(grid, start, end).0;
-                    
+
                     // If normal path is longer than manhattan distance, we found a shortcut
                     if normal_time > manhattan_dist {
                         let saved = normal_time - manhattan_dist;
@@ -292,13 +298,13 @@ mod tests {
         let (grid, start, end) = Day20::parse_input(SAMPLE);
         let (normal_time, path) = Day20::find_normal_path(&grid, start, end);
         let time_savings = Day20::find_long_shortcuts(&grid, &path, 20);
-        
+
         // Count occurrences of each time saving
         let mut counts: std::collections::HashMap<i32, i32> = std::collections::HashMap::new();
         for &saving in &time_savings {
             *counts.entry(saving).or_insert(0) += 1;
         }
-        
+
         // Check specific values from the example
         assert_eq!(*counts.get(&76).unwrap_or(&0), 3); // 3 cheats that save 76 picoseconds
         assert_eq!(*counts.get(&74).unwrap_or(&0), 4); // 4 cheats that save 74 picoseconds
