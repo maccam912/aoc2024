@@ -256,6 +256,37 @@ mod tests {
         let sequence: String = moves.into_iter().collect();
         println!("Sequence for 'A': {}", sequence);
     }
+
+    #[test]
+    fn test_full_sequence() {
+        let keypad_robot = NumericKeypadRobot::new();
+        let mut robot2 = DirectionalKeypadRobot::new();
+        let mut full_sequence = String::new();
+
+        // Press "0"
+        let target_pos = keypad_robot.get_position_for_button('0').unwrap();
+        let moves = robot2.find_path_to(target_pos);
+        full_sequence.extend(moves.iter());
+
+        // Press "2"
+        let target_pos = keypad_robot.get_position_for_button('2').unwrap();
+        let moves = robot2.find_path_to(target_pos);
+        full_sequence.extend(moves.iter());
+
+        // Press "9"
+        let target_pos = keypad_robot.get_position_for_button('9').unwrap();
+        let moves = robot2.find_path_to(target_pos);
+        full_sequence.extend(moves.iter());
+
+        // Press "A"
+        let target_pos = keypad_robot.get_position_for_button('A').unwrap();
+        let moves = robot2.find_path_to(target_pos);
+        full_sequence.extend(moves.iter());
+
+        println!("Full sequence for '029A': {}", full_sequence);
+        // One of the valid sequences from the problem description is: <A^A>^^AvvvA
+        assert!(full_sequence.len() <= 11, "Sequence should be no longer than the example sequence");
+    }
     
     // Commenting out the original test temporarily
     /*
