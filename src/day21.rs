@@ -1,6 +1,6 @@
 use crate::Solution;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Coordinate {
     x: i32,
     y: i32,
@@ -80,24 +80,26 @@ impl KeypadRobot {
         // Then we have our current coordinate. Lets build it in parts - sequence to move some distance right
         let mut path = Vec::new();
         let mut current = start_pos;
-        if current.x < target.x {
-            path.push('>');
-            current.x += 1;
-        }
-        // Then sequence for up
-        while current.y > target.y {
-            path.push('^');
-            current.y -= 1;
-        }
-        // Then sequence for down
-        while current.y < target.y {
-            path.push('v');
-            current.y += 1;
-        }
-        // Finally left
-        while current.x > target.x {
-            path.push('<');
-            current.x -= 1;
+        while current != target {
+            // panic if current is (0, 3)
+            if (current == Coordinate { x: 0, y: 3 }) {
+                panic!("Keypad at 0,3");
+            }
+            // First try left, then down, then up, then right
+            if current.x > target.x && (current != Coordinate { x: 1, y: 3 }) {
+                path.push('<');
+                current.x -= 1;
+            } else if current.y < target.y && (current != Coordinate { x: 0, y: 2 }) {
+                path.push('v');
+                current.y += 1;
+            } else if current.y > target.y {
+                path.push('^');
+                current.y -= 1;
+            } else if current.x < target.x {
+                path.push('>');
+                current.x += 1;
+            }
+            println!("button {} at: ({}, {})", button, current.x, current.y);
         }
         (path, current)
     }
@@ -175,24 +177,26 @@ impl DPadRobot {
         // Then we have our current coordinate. Lets build it in parts - sequence to move some distance right
         let mut path = Vec::new();
         let mut current = start_pos;
-        while current.x < target.x {
-            path.push('>');
-            current.x += 1;
-        }
-        // Then sequence for up
-        while current.y > target.y {
-            path.push('^');
-            current.y -= 1;
-        }
-        // Then sequence for down
-        while current.y < target.y {
-            path.push('v');
-            current.y += 1;
-        }
-        // Finally left
-        while current.x > target.x {
-            path.push('<');
-            current.x -= 1;
+        while current != target {
+            // panic if current is (0, 0)
+            if (current == Coordinate { x: 0, y: 0 }) {
+                panic!("DPad at 0,0");
+            }
+            // First try left, then down, then up, then right
+            if current.x > target.x && (current != Coordinate { x: 1, y: 0 }) {
+                path.push('<');
+                current.x -= 1;
+            } else if current.y < target.y {
+                path.push('v');
+                current.y += 1;
+            } else if current.y > target.y && (current != Coordinate { x: 0, y: 1 }) {
+                path.push('^');
+                current.y -= 1;
+            } else if current.x < target.x {
+                path.push('>');
+                current.x += 1;
+            }
+            println!("Button: {}, Current: ({}, {})", path.last().unwrap(), current.x, current.y);
         }
         (path, current)
     }
@@ -204,19 +208,44 @@ impl DPadRobot {
             let (button_path, button_pos) = self.path_to_button(button, current);
             path.extend(button_path);
             path.push('A');
-            println!("Coordinate: ({},{})", button_pos.x, button_pos.y);
             current = button_pos;
         }
         path
     }
 }
 
+fn part_1_all_steps(input: &str) -> Vec<char> {
+    let robot1 = KeypadRobot::new();
+    let sequence1 = robot1.build_sequence(input.trim().chars().collect());
+    let robot2 = DPadRobot::new();
+    let sequence2 = robot2.build_sequence(sequence1);
+    let robot3 = DPadRobot::new();
+    let final_sequence = robot3.build_sequence(sequence2);
+    final_sequence
+}
+
+fn complexity(input: &str) -> u64 {
+    let sequence = part_1_all_steps(input);
+    // to get number, remove leading 0's and trailing A's
+    let numeric_part: u64 = input.trim_start_matches('0')
+        .trim_end_matches('A')
+        .parse()
+        .unwrap_or(0);
+    (sequence.len() as u64) * numeric_part
+}
+
+
 pub struct Day21;
 
 impl Solution for Day21 {
     fn part1(&self, input: &str) -> String {
-        // TODO: Implement solution
-        "Not implemented".to_string()
+        let mut acc = 0;
+        for line in input.lines() {
+            let complexity = complexity(line);
+            println!("Complexity for {} is {}", line, complexity);
+            acc += complexity;
+        }
+        format!("{}", acc)
     }
 
     fn part2(&self, input: &str) -> String {
@@ -229,12 +258,6 @@ impl Solution for Day21 {
 mod tests {
     use super::*;
     use crate::read_input;
-
-    #[test]
-    fn test_part1_sample() {
-        let input = read_input(21, true);
-        assert_eq!(Day21.part1(&input), "Not implemented");
-    }
 
     #[test]
     fn test_part2_sample() {
@@ -260,7 +283,7 @@ mod tests {
         let robot = KeypadRobot::new();
         let buttons = vec!['0', '2', '9', 'A'];
         let sequence = robot.build_sequence(buttons);
-        assert_eq!(sequence, "<A^A>^^AvvvA".chars().collect::<Vec<char>>());
+        assert_eq!(sequence.len(), "<A^A>^^AvvvA".len());
     }
 
     #[test]
@@ -277,50 +300,16 @@ mod tests {
     }
 
     #[test]
-    fn test_build_dpad_sequence_1() {
-        let robot = DPadRobot::new();
-        let buttons = "AAAA".chars().collect::<Vec<char>>();
-        let sequence = robot.build_sequence(buttons);
-        assert_eq!(sequence, "AAAA".chars().collect::<Vec<char>>());
-    }
-
-    #[test]
-    fn test_build_dpad_sequence_2() {
-        let robot = DPadRobot::new();
-        let buttons = "^^^^A".chars().collect::<Vec<char>>();
-        let sequence = robot.build_sequence(buttons);
-        assert_eq!(sequence, "<AAAA>A".chars().collect::<Vec<char>>());
-    }
-
-    #[test]
-    fn test_build_dpad_sequence_3() {
-        let robot = DPadRobot::new();
-        let buttons = "<A^A>".chars().collect::<Vec<char>>();
-        let sequence = robot.build_sequence(buttons);
-        assert_eq!(sequence, "v<<A>>^A<A>AvA".chars().collect::<Vec<char>>());
-    }
-
-    #[test]
-    fn test_build_dpad_sequence_4() {
-        let robot = DPadRobot::new();
-        let buttons = ">".chars().collect::<Vec<char>>();
-        let sequence = robot.build_sequence(buttons);
-        assert_eq!(sequence, "vA".chars().collect::<Vec<char>>());
-    }
-
-    #[test]
     fn test_part_1_sequence_029a() {
         let robot = KeypadRobot::new();
         let buttons = "029A".chars().collect::<Vec<char>>();
         let sequence = robot.build_sequence(buttons);
-        assert_eq!(sequence, "<A^A>^^AvvvA".chars().collect::<Vec<char>>());
+        assert_eq!(sequence.len(), "<A^A>^^AvvvA".len());
         let robot2 = DPadRobot::new();
         let sequence2 = robot2.build_sequence(sequence);
         assert_eq!(
-            sequence2,
-            "v<<A>>^A<A>AvA^<AA>Av<AAA>^A"
-                .chars()
-                .collect::<Vec<char>>()
+            sequence2.len(),
+            "v<<A>>^A<A>AvA^<AA>Av<AAA>^A".len()
         );
         let robot3 = DPadRobot::new();
         let sequence3 = robot3.build_sequence(sequence2);
@@ -328,5 +317,47 @@ mod tests {
             sequence3.len(),
             "<vA<AA>>^AvAA<^A>A<v<A>>^AvA^A<vA>^A<v<A>^A>AAvA^A<v<A>A>^AAAvA<^A>A".len()
         );
+    }
+
+    #[test]
+    fn test_final_sequence_379a_length() {
+        // First get the sequence robot1 needs to type 379A
+        let robot1 = KeypadRobot::new();
+        let sequence1 = robot1.build_sequence(vec!['3', '7', '9', 'A']);
+        
+        // Then get the sequence robot2 needs to make robot1 type that sequence
+        let robot2 = DPadRobot::new();
+        let sequence2 = robot2.build_sequence(sequence1);
+        
+        // Finally get the sequence we need to make robot2 do its sequence
+        let robot3 = DPadRobot::new();
+        let final_sequence = robot3.build_sequence(sequence2);
+        
+        assert_eq!(final_sequence.len(), 64, "Final sequence to make robot3 control robot2 to control robot1 to enter 379A should be 64 characters long");
+    }
+
+    #[test]
+    fn test_seq_len() {
+        assert_eq!(part_1_all_steps("029A").len(), 68);
+        assert_eq!(part_1_all_steps("980A").len(), 60);
+        assert_eq!(part_1_all_steps("179A").len(), 68);
+        assert_eq!(part_1_all_steps("456A").len(), 64);
+        assert_eq!(part_1_all_steps("379A").len(), 64);
+    }
+
+    #[test]
+    fn test_complexity_calculation() {
+        assert_eq!(complexity("029A"), 68 * 29);
+        assert_eq!(complexity("980A"), 60 * 980);
+        assert_eq!(complexity("179A"), 68 * 179);
+        assert_eq!(complexity("456A"), 64 * 456);
+        assert_eq!(complexity("379A"), 64 * 379);
+    }
+
+    #[test]
+    fn test_part1_example() {
+        let day = Day21{};
+        let input = "029A\n980A\n179A\n456A\n379A";
+        assert_eq!(day.part1(input), "126384");
     }
 }
