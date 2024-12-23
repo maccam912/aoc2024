@@ -1,39 +1,54 @@
-// Life saved maybe by https://topaz.github.io/paste/#XQAAAQCRDgAAAAAAAAA6nMjJFHMADebh9lMSAXn5c0lZw0XzLjIVxATQJaSMlgO28y8f4vw2/ZRr/BoX9x1wncFquy1SYbjPUHtpSp1bPYZU63+UbJgg05wGIRzCsLgHYhjpS2Q3uXCzIYUZbr40EePh1kqfhS97EJrBw9DxiN0iZMXbpFk0tttccIts4MOYg4ue+/egqBLWRwvjg/mhfrgyG1B8No8vdWwCJHmuplIZPDfmqD5WQ7wM748Az/S5pHYDKCYwQf7CryRjbJQ3OM0I0VD7XiGt57blkJfGXziGT5dK+z81wslPdxvuXsMsxTG/iUHpUSjf/0qJ5QvPgImAr+jbdrdFB5/kvnxJZH+wxvRTk3N5J7d7LpEh+ltZC659X0U4XueBzNn99BReogKTh5jDRvcSc46s/2iCj9plDZhEZxUybHVj5C/qAKRvEj+py+8qMlCxmnZobDAJEIeiaHIRImVAPLD9irLI4cCtkuRiAfqNfvvBzQoGdz5qz9DUGZGZwivSB/PJicf+cUgu8z2kd1oc9QKYmgLsRwkVL0EUl0Wf3aKo12JOchHNm9BYbp9CL96o4r2VItmV1zlL3us1ET/heC1l4RvjirAEdA/tZ/QXnbHWYkJd2PRz0sjLLj6dan8+gGieE/4IyN0fZEPQXPxzqF6kfFcMop4qH6jCwVyBFshCqt5jy3XALT2l2j09d95fZmC5eLRbjN6EK2HcXog/OH2rJKAGrC3ROVHJOa+n6T7Q/Z+NHHCHRp/EPyHdpukp/qn48CISR+7xfYWsuby3R7S5+ZBLhGAOPyc3aZ8YCwYS3h1D1lrt1Tn2QPskOWDNhRcCnXPFVEjMWnwqcwmLnuLsvI/+U3i5UwU4UDoKFZGizjQwo7qncQWwSVDqQNtH0Pp3z5fX0zFn+SWtCa1nqdvcTrUns6FlPUzdJfGZsnIQ1il4PtafAZ/WagA0Raso5ZYK5Xx8yuvgL4W0zejtEu50bBJonHdRZl1l8HR4h9IPpRF6lM5HgyVDWehCewFgmPLT8nOJgnjFbtVgQqWHdlVTNrDV0TO3hV+38U6jqz2IMNOstbYRR1aEW1Et9ucHRzCZ0IjYxy5Kbmb8uJu55DyKq1twdVgU2xrJUAvWcgLbxHijqrPQz8Li8eQ/mpeOizLNrO63GbVdoLvNwSpg8Bj+uJ7WcjlRYZv4kqjce/qTaxWjSX4so27KwwlD9HA8ISGc0mf8aZzeNiUyqfswVlby7P2Y3VPPcMT+ZSMmpIw2ADmaFijGBeNxr7PxgBEtivewRt6HoQ21CMDxQxE+vUyJspunPWYFmYoS+NPEYptKQfzsv7ah0WEon2Q+Vl8Z3N++kG5OXOQ1hJLGljLL7KVt4XAAWmf+h+jr8l4axn9MriqHM6YThKGnX8hxqwFZmP+DZoLfK+yin2fUyfBeglK5ACddPuDJCGKn4R+BV/xBDQXEjqMsTQ1Qp2MtWy5bezK24X9o3dr4M5pP4Mh0OZuZO1Z1IaDWVwLJj6R6B0a7JmhIcigxXEPzKqVUmWcPVv3mSAs=
+// This solution uses a clever approach to solve the robot keypad sequence problem
+// The core idea is to model the keypads as graphs and find shortest paths between buttons,
+// while handling multiple layers of robot control through recursive path finding
+
 use itertools::Itertools;
 use std::collections::{HashMap, VecDeque};
 use std::iter;
 
+// Position on a keypad, using zero-based row and column indices
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct Pos(usize, usize);
 
+// Find all possible shortest paths between two positions on a keypad while avoiding a gap
+// Uses a breadth-first search (BFS) to ensure we find all shortest paths
+// The gap parameter represents a position that cannot be crossed (empty space on keypad)
 fn paths(a: Pos, b: Pos, gap: Pos) -> Vec<String> {
     let mut q = VecDeque::from([(a, String::new())]);
     let mut res = vec![];
     while let Some((Pos(i, j), mut path)) = q.pop_front() {
+        // Found target position - add the final 'A' press and save this path
         if Pos(i, j) == b {
             path.push('A');
             res.push(path);
             continue;
         }
-        // left
+        
+        // For each direction (left/up/down/right):
+        // 1. Check if moving in this direction gets us closer to target
+        // 2. Ensure we don't cross the gap position
+        // 3. Generate the sequence of moves needed to reach the target position
+        // 4. Add the new position and path to the queue
+        
+        // Move left if target is to the left and we won't cross the gap
         if b.1 < j && !(gap.0 == i && gap.1 < j && gap.1 >= b.1) {
             let mut new_path = path.clone();
             new_path.extend(iter::repeat('<').take(j - b.1));
             q.push_back((Pos(i, b.1), new_path));
         }
-        // up
+        // Move up if target is above and won't cross gap
         if b.0 < i && !(gap.1 == j && gap.0 < i && gap.0 >= b.0) {
             let mut new_path = path.clone();
             new_path.extend(iter::repeat('^').take(i - b.0));
             q.push_back((Pos(b.0, j), new_path));
         }
-        // down
+        // Move down if target is below and won't cross gap
         if b.0 > i && !(gap.1 == j && gap.0 > i && gap.0 <= b.0) {
             let mut new_path = path.clone();
             new_path.extend(iter::repeat('v').take(b.0 - i));
             q.push_back((Pos(b.0, j), new_path));
         }
-        // right
+        // Move right if target is to the right and won't cross gap
         if b.1 > j && !(gap.0 == i && gap.1 > j && gap.1 <= b.1) {
             let mut new_path = path.clone();
             new_path.extend(iter::repeat('>').take(b.1 - j));
@@ -43,12 +58,18 @@ fn paths(a: Pos, b: Pos, gap: Pos) -> Vec<String> {
     res
 }
 
+// Represents a keypad with button positions and a gap position
 struct Keypad {
-    keymap: HashMap<char, Pos>,
-    gap: Pos,
+    keymap: HashMap<char, Pos>,  // Maps button symbols to their positions
+    gap: Pos,                    // Position of the empty space
 }
 
 impl Keypad {
+    // Create the numeric keypad layout (the door keypad)
+    // 789
+    // 456
+    // 123
+    //  0A
     fn numeric() -> Self {
         let keymap = HashMap::from([
             ('7', Pos(0, 0)),
@@ -67,6 +88,9 @@ impl Keypad {
         Keypad { keymap, gap }
     }
 
+    // Create the directional keypad layout (the robot control pad)
+    //  ^A
+    // <v>
     fn directional() -> Self {
         let keymap = HashMap::from([
             ('^', Pos(0, 1)),
@@ -79,11 +103,21 @@ impl Keypad {
         Keypad { keymap, gap }
     }
 
+    // Find all possible paths between two buttons on this keypad
     fn paths(&self, a: char, b: char) -> Vec<String> {
         paths(self.keymap[&a], self.keymap[&b], self.gap)
     }
 }
 
+// Find the shortest sequence length to type a code through multiple layers of robot control
+// Uses dynamic programming with memoization to avoid recomputing paths
+// Parameters:
+// - np: numeric keypad (final door keypad)
+// - dp: directional keypad (robot control pad)
+// - code: sequence to type
+// - depth: current robot layer (0 = door keypad, 1+ = control keypads)
+// - max_depth: total number of robot layers
+// - cache: memoization cache to store computed results
 fn shortest_len(
     np: &Keypad,
     dp: &Keypad,
@@ -92,11 +126,18 @@ fn shortest_len(
     max_depth: usize,
     cache: &mut HashMap<(usize, String), usize>,
 ) -> usize {
+    // Check if we've already computed this result
     if let Some(&cached) = cache.get(&(depth, code.clone())) {
         return cached;
     }
 
+    // Choose which keypad to use based on depth
     let kp = if depth == 0 { np } else { dp };
+    
+    // For each pair of consecutive characters in the sequence:
+    // 1. Find all possible paths between them on the current keypad
+    // 2. If at max depth, take the shortest path length
+    // 3. Otherwise, recursively find shortest sequence for each path
     let res = iter::once('A')
         .chain(code.chars())
         .tuple_windows()
@@ -114,10 +155,12 @@ fn shortest_len(
         })
         .sum::<usize>();
 
+    // Cache and return the result
     cache.insert((depth, code), res);
     res
 }
 
+// Part 1: Find complexity sum for 2 layers of robots
 pub fn part1(input: &str) -> usize {
     let np = Keypad::numeric();
     let dp = Keypad::directional();
@@ -131,6 +174,7 @@ pub fn part1(input: &str) -> usize {
         .sum()
 }
 
+// Part 2: Same as part 1 but with 25 layers of robots
 pub fn part2(input: &str) -> usize {
     let np = Keypad::numeric();
     let dp = Keypad::directional();
