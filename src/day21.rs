@@ -25,13 +25,13 @@ fn paths(a: Pos, b: Pos, gap: Pos) -> Vec<String> {
             res.push(path);
             continue;
         }
-        
+
         // For each direction (left/up/down/right):
         // 1. Check if moving in this direction gets us closer to target
         // 2. Ensure we don't cross the gap position
         // 3. Generate the sequence of moves needed to reach the target position
         // 4. Add the new position and path to the queue
-        
+
         // Move left if target is to the left and we won't cross the gap
         if b.1 < j && !(gap.0 == i && gap.1 < j && gap.1 >= b.1) {
             let mut new_path = path.clone();
@@ -62,8 +62,8 @@ fn paths(a: Pos, b: Pos, gap: Pos) -> Vec<String> {
 
 // Represents a keypad with button positions and a gap position
 struct Keypad {
-    keymap: HashMap<char, Pos>,  // Maps button symbols to their positions
-    gap: Pos,                    // Position of the empty space
+    keymap: HashMap<char, Pos>, // Maps button symbols to their positions
+    gap: Pos,                   // Position of the empty space
 }
 
 impl Keypad {
@@ -135,7 +135,7 @@ fn shortest_len(
 
     // Choose which keypad to use based on depth
     let kp = if depth == 0 { np } else { dp };
-    
+
     // For each pair of consecutive characters in the sequence:
     // 1. Find all possible paths between them on the current keypad
     // 2. If at max depth, take the shortest path length
