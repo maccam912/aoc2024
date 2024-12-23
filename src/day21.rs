@@ -131,8 +131,17 @@ pub fn part1(input: &str) -> usize {
         .sum()
 }
 
-pub fn part2(_input: &str) -> usize {
-    0
+pub fn part2(input: &str) -> usize {
+    let np = Keypad::numeric();
+    let dp = Keypad::directional();
+    let mut cache = HashMap::new();
+    input
+        .lines()
+        .map(|code| {
+            shortest_len(&np, &dp, code.to_string(), 0, 25, &mut cache)
+                * code[0..3].parse::<usize>().unwrap()
+        })
+        .sum()
 }
 
 #[cfg(test)]
@@ -156,15 +165,35 @@ mod tests {
 
         for (code, expected_len, numeric_part) in test_cases {
             let len = shortest_len(&np, &dp, code.to_string(), 0, 2, &mut cache);
-            assert_eq!(len, expected_len, "Sequence length mismatch for code {}", code);
-            
+            assert_eq!(
+                len, expected_len,
+                "Sequence length mismatch for code {}",
+                code
+            );
+
             let complexity = len * numeric_part;
-            println!("Code: {}, Length: {}, Numeric: {}, Complexity: {}", code, len, numeric_part, complexity);
+            println!(
+                "Code: {}, Length: {}, Numeric: {}, Complexity: {}",
+                code, len, numeric_part, complexity
+            );
         }
 
-        // Test total complexity
+        // Test total complexity for part 1
         let input = "029A\n980A\n179A\n456A\n379A";
         assert_eq!(part1(input), 126384);
+
+        // Test part 2 with same input but 25 robots
+        let mut cache = HashMap::new();
+        for (code, _, numeric_part) in test_cases {
+            let len = shortest_len(&np, &dp, code.to_string(), 0, 25, &mut cache);
+            println!(
+                "Part 2 - Code: {}, Length: {}, Numeric: {}, Complexity: {}",
+                code,
+                len,
+                numeric_part,
+                len * numeric_part
+            );
+        }
     }
 }
 
