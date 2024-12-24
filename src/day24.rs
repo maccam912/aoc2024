@@ -43,9 +43,47 @@ impl Solution for Day24 {
         result.to_string()
     }
 
-    fn part2(&self, _input: &str) -> String {
-        // Part 2 not implemented yet
-        "Not implemented".to_string()
+    fn part2(&self, input: &str) -> String {
+        let (initial_values, gates) = parse_input(input);
+        let wire_values = simulate_circuit(&initial_values, &gates);
+
+        // Helper function to get sorted wires by prefix and convert to decimal
+        let get_decimal_value = |prefix: char| {
+            let mut wires: Vec<_> = wire_values.keys()
+                .filter(|k| k.starts_with(prefix))
+                .collect();
+            wires.sort_by(|a, b| {
+                let a_num = a[1..].parse::<usize>().unwrap_or(0);
+                let b_num = b[1..].parse::<usize>().unwrap_or(0);
+                b_num.cmp(&a_num)
+            });
+            
+            let mut result = 0;
+            for wire in wires.iter() {
+                let bit = *wire_values.get(*wire).unwrap_or(&0);
+                result = (result << 1) | (bit as u64);
+            }
+            result
+        };
+
+        let x_value = get_decimal_value('x');
+        let y_value = get_decimal_value('y');
+        let z_value = get_decimal_value('z');
+        let xy_sum = x_value + y_value;
+
+        // Get the maximum length needed for binary representation
+        let max_bits = std::cmp::max(z_value.ilog2() as usize + 1, xy_sum.ilog2() as usize + 1);
+        let z_binary = format!("{:0width$b}", z_value, width = max_bits);
+        let xy_binary = format!("{:0width$b}", xy_sum, width = max_bits);
+
+        // Calculate how many bits are different
+        let different_bits = z_binary.chars()
+            .zip(xy_binary.chars())
+            .filter(|(a, b)| a != b)
+            .count();
+
+        format!("x: {}, y: {}, z: {}, x+y: {}\nz binary:  {}\nx+y binary:{}\nDifferent bits: {}", 
+            x_value, y_value, z_value, xy_sum, z_binary, xy_binary, different_bits)
     }
 }
 
@@ -155,6 +193,6 @@ mod tests {
     #[test]
     fn test_part2_sample() {
         let input = read_input(24, true);
-        assert_eq!(Day24.part2(&input), "Not implemented");
+        assert_eq!(Day24.part2(&input), "x: 0, y: 0, z: 0, x+y: 0\nz binary:  0\nx+y binary:0\nDifferent bits: 0");
     }
 }
