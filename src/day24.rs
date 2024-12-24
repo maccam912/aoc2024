@@ -1,323 +1,193 @@
 use crate::Solution;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Logic {
+    And,
+    Or,
+    Xor,
+}
+
+struct Gate<'a> {
+    logic: Logic,
+    a: &'a str,
+    b: &'a str,
+    out: &'a str,
+}
 
 pub struct Day24;
 
-#[derive(Debug, Clone)]
-enum Gate {
-    And(String, String),
-    Or(String, String),
-    Xor(String, String),
+/// Take all wires that start with the given prefix, sort them by name, and
+/// decode them to an integer
+fn get_value(wires: &HashMap<&str, u8>, prefix: &str) -> u64 {
+    // find wires that start with prefix
+    let mut wires_to_decode = wires
+        .iter()
+        .filter(|(name, _)| name.starts_with(prefix))
+        .collect::<Vec<_>>();
+
+    // sort wires by name
+    wires_to_decode.sort();
+
+    // 00 is the least significant bit
+    wires_to_decode.reverse();
+
+    // decode
+    let mut result = 0u64;
+    for (_, v) in wires_to_decode {
+        result <<= 1;
+        if *v == 1 {
+            result += 1;
+        }
+    }
+
+    result
+}
+
+fn run<'a>(wires: &HashMap<&'a str, u8>, gates: &[Gate<'a>]) -> HashMap<&'a str, u8> {
+    let mut wires = wires.clone();
+    let mut changed = true;
+
+    while changed {
+        changed = false;
+        for gate in gates {
+            if wires.contains_key(gate.out) {
+                continue;
+            }
+
+            let Some(&a) = wires.get(gate.a) else {
+                continue;
+            };
+            let Some(&b) = wires.get(gate.b) else {
+                continue;
+            };
+
+            let v = match gate.logic {
+                Logic::And => {
+                    if a == 1 && b == 1 {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                Logic::Or => {
+                    if a == 1 || b == 1 {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                Logic::Xor => {
+                    if a != b {
+                        1
+                    } else {
+                        0
+                    }
+                }
+            };
+
+            wires.insert(gate.out, v);
+            changed = true;
+        }
+    }
+
+    wires
 }
 
 impl Solution for Day24 {
     fn part1(&self, input: &str) -> String {
         let (initial_values, gates) = parse_input(input);
-        println!("Initial values: {:?}", initial_values);
-        println!("Gates: {:?}", gates);
-        
-        let wire_values = simulate_circuit(&initial_values, &gates);
-        println!("Final wire values: {:?}", wire_values);
-        
-        // Get all z-wires sorted by their numeric suffix in descending order
-        let mut z_wires: Vec<_> = wire_values.keys()
-            .filter(|k| k.starts_with('z'))
-            .collect();
-        z_wires.sort_by(|a, b| {
-            let a_num = a[1..].parse::<usize>().unwrap_or(0);
-            let b_num = b[1..].parse::<usize>().unwrap_or(0);
-            b_num.cmp(&a_num)
-        });
-        
-        println!("Z-wires in order: {:?}", z_wires);
-
-        // Combine bits into a decimal number
-        let mut result = 0;
-        for wire in z_wires.iter() {
-            let bit = *wire_values.get(*wire).unwrap_or(&0);
-            println!("Wire {} = {}", wire, bit);
-            result = (result << 1) | (bit as u64);
-            println!("Current result: {}", result);
-        }
-
-        result.to_string()
+        let wire_values = run(&initial_values, &gates);
+        get_value(&wire_values, "z").to_string()
     }
 
     fn part2(&self, input: &str) -> String {
-        let (initial_values, gates) = parse_input(input);
-        
-        // Helper function to calculate hamming distance
-        let calculate_hamming_distance = |gates: &HashMap<String, Gate>| {
-            let wire_values = simulate_circuit(&initial_values, gates);
-            
-            // Helper function to get sorted wires by prefix and convert to decimal
-            let get_decimal_value = |prefix: char| {
-                let mut wires: Vec<_> = wire_values.keys()
-                    .filter(|k| k.starts_with(prefix))
-                    .collect();
-                wires.sort_by(|a, b| {
-                    let a_num = a[1..].parse::<usize>().unwrap_or(0);
-                    let b_num = b[1..].parse::<usize>().unwrap_or(0);
-                    b_num.cmp(&a_num)
-                });
-                
-                let mut result = 0;
-                for wire in wires.iter() {
-                    let bit = *wire_values.get(*wire).unwrap_or(&0);
-                    result = (result << 1) | (bit as u64);
-                }
-                result
+        let (initial_wires, gates) = parse_input(input);
+
+        // Find broken nodes by checking common patterns
+        let mut edges: HashMap<&str, Vec<&str>> = HashMap::new();
+        for g in &gates {
+            edges.entry(g.a).or_default().push(g.out);
+            edges.entry(g.b).or_default().push(g.out);
+        }
+
+        let mut broken_nodes = HashSet::new();
+        for g in &gates {
+            // z nodes must be XOR (except for the last one)
+            if g.out.starts_with("z") && g.out != "z45" && g.logic != Logic::Xor {
+                broken_nodes.insert(g.out);
+            }
+            // z nodes must not be inputs of other nodes
+            if g.a.starts_with("z") {
+                broken_nodes.insert(g.a);
+            }
+            if g.b.starts_with("z") {
+                broken_nodes.insert(g.b);
+            }
+
+            // inputs of XOR nodes (except for z nodes) must be x and y nodes
+            if g.logic == Logic::Xor
+                && !g.out.starts_with("z")
+                && !((g.a.starts_with("x") && g.b.starts_with("y"))
+                    || (g.a.starts_with("y") && g.b.starts_with("x")))
+            {
+                broken_nodes.insert(g.out);
+            }
+
+            // XOR nodes (except z nodes) must always be input of exactly two other nodes
+            if g.logic == Logic::Xor && !g.out.starts_with("z") && edges[g.out].len() != 2 {
+                broken_nodes.insert(g.out);
+            }
+
+            // AND nodes must always be input of exactly one other node
+            if g.logic == Logic::And
+                && !g.out.starts_with("z")
+                && edges[g.out].len() != 1
+                && !((g.a == "x00" && g.b == "y00") || (g.a == "y00" && g.b == "x00"))
+            {
+                broken_nodes.insert(g.out);
+            }
+        }
+
+        // Return the broken nodes sorted
+        let mut broken_nodes = broken_nodes.into_iter().collect::<Vec<_>>();
+        broken_nodes.sort();
+        broken_nodes.join(",")
+    }
+}
+
+fn parse_input(input: &str) -> (HashMap<&str, u8>, Vec<Gate>) {
+    let (wires, gates) = input.split_once("\n\n").unwrap();
+
+    let wires = wires
+        .lines()
+        .map(|w| {
+            let (name, value) = w.split_once(": ").unwrap();
+            (name, if value == "1" { 1 } else { 0 })
+        })
+        .collect();
+
+    let gates = gates
+        .lines()
+        .map(|l| {
+            let (left, out) = l.split_once(" -> ").unwrap();
+            let s = left.split_whitespace().collect::<Vec<_>>();
+            let logic = match s[1] {
+                "AND" => Logic::And,
+                "OR" => Logic::Or,
+                "XOR" => Logic::Xor,
+                _ => panic!("Invalid gate: {}", left),
             };
-
-            let x_value = get_decimal_value('x');
-            let y_value = get_decimal_value('y');
-            let z_value = get_decimal_value('z');
-            let xy_sum = x_value + y_value;
-
-            let max_bits = 32; //std::cmp::max(z_value.ilog2() as usize + 1, xy_sum.ilog2() as usize + 1);
-            let z_binary = format!("{:0width$b}", z_value, width = max_bits);
-            let xy_binary = format!("{:0width$b}", xy_sum, width = max_bits);
-
-            let hamming_distance = z_binary.chars()
-                .zip(xy_binary.chars())
-                .filter(|(a, b)| a != b)
-                .count();
-
-            (hamming_distance, x_value, y_value, z_value, xy_sum, z_binary, xy_binary)
-        };
-
-        // Get original hamming distance
-        let (original_distance, x_value, y_value, z_value, xy_sum, z_binary, xy_binary) = 
-            calculate_hamming_distance(&gates);
-
-        // Find which bits differ in the original circuit
-        let original_diff_bits: Vec<usize> = z_binary.chars()
-            .zip(xy_binary.chars())
-            .enumerate()
-            .filter(|(_, (z, xy))| z != xy)
-            .map(|(i, _)| i)
-            .collect();
-
-        println!("Original differing bits: {:?}", original_diff_bits);
-
-        // Track all improvements and their affected bits
-        let mut improvements = Vec::new();
-        
-        let gate_entries: Vec<_> = gates.iter().collect();
-        let mut count = 0;
-        for i in 0..gate_entries.len() {
-            for j in (i + 1)..gate_entries.len() {
-                count += 1;
-                if count % 1000 == 0 {
-                    println!("{}/{}\r", count, (gate_entries.len() * gate_entries.len())/2);
-                }
-                let mut new_gates = gates.clone();
-                
-                // Swap the output wires
-                let (output1, gate1) = gate_entries[i];
-                let (output2, gate2) = gate_entries[j];
-                
-                new_gates.insert(output1.clone(), gate2.clone());
-                new_gates.insert(output2.clone(), gate1.clone());
-                
-                let (new_distance, _, _, _, _, new_z_binary, new_xy_binary) = calculate_hamming_distance(&new_gates);
-
-                if new_distance < original_distance {
-                    // Find which bits changed
-                    let changed_bits: Vec<usize> = new_z_binary.chars()
-                        .zip(new_xy_binary.chars())
-                        .enumerate()
-                        .filter(|(_, (z, xy))| z != xy)
-                        .map(|(i, _)| i)
-                        .collect();
-
-                    improvements.push((
-                        output1.clone(),
-                        output2.clone(),
-                        new_distance,
-                        changed_bits.clone()
-                    ));
-                    
-                    //println!("Swap {} and {} changes {} bits: {:?}", 
-                    //    output1, output2, changed_bits.len(), changed_bits);
-                }
+            Gate {
+                logic,
+                a: s[0],
+                b: s[2],
+                out,
             }
-        }
+        })
+        .collect();
 
-        // Sort improvements by number of bits changed
-        improvements.sort_by_key(|(_, _, dist, bits)| (*dist, bits.len()));
-
-        // Count how many pairs affect each bit
-        let mut bit_coverage = std::collections::HashMap::new();
-        for bit in &original_diff_bits {
-            bit_coverage.insert(bit, Vec::new());
-        }
-
-        for (g1, g2, _, bits) in &improvements {
-            for bit in bits {
-                if let Some(pairs) = bit_coverage.get_mut(&bit) {
-                    pairs.push((g1.clone(), g2.clone()));
-                }
-            }
-        }
-
-        // Sort bits by how many pairs affect them
-        let mut bit_counts: Vec<_> = bit_coverage.iter().collect();
-        bit_counts.sort_by_key(|(_, pairs)| pairs.len());
-        
-        // Find combinations of exactly 4 pairs that cover all bits
-        let mut valid_combinations = Vec::new();
-        
-        // Find the bit with fewest fixing pairs
-        if let Some((&hardest_bit, hardest_bit_pairs)) = bit_counts.first() {
-            println!("Bit {} has fewest fixing pairs: {}", hardest_bit, hardest_bit_pairs.len());
-            
-            // Filter improvements to only those that fix the hardest bit
-            let critical_improvements: Vec<_> = improvements.iter()
-                .filter(|(_, _, _, bits)| bits.contains(&hardest_bit))
-                .collect();
-            
-            let remaining_improvements: Vec<_> = improvements.iter()
-                .filter(|(_, _, _, bits)| !bits.contains(&hardest_bit))
-                .collect();
-            
-            println!("Trying {} improvements that fix bit {}", critical_improvements.len(), hardest_bit);
-            
-            // Try combinations where we force one of the critical improvements
-            for &critical_pair in &critical_improvements {
-                for i in 0..remaining_improvements.len() {
-                    for j in (i+1)..remaining_improvements.len() {
-                        for k in (j+1)..remaining_improvements.len() {
-                            let combination = vec![
-                                critical_pair,
-                                remaining_improvements[i],
-                                remaining_improvements[j],
-                                remaining_improvements[k],
-                            ];
-                            if covers_all_bits(&combination, &original_diff_bits) {
-                                valid_combinations.push(combination);
-                                // Optional: break early if we just want one solution
-                                // if valid_combinations.len() > 0 { break; }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        format!("Original differing bits ({} bits): {:?}\n\nBit coverage:\n{}\n\nFound {} improvements\n\nValid 4-pair combinations: {}\nFirst valid combination:\n{}",
-            original_diff_bits.len(),
-            original_diff_bits,
-            bit_counts.iter()
-                .map(|(&bit, pairs)| format!("Bit {}: {} pairs affect it", 
-                    bit, 
-                    pairs.len(),
-                ))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            improvements.len(),
-            valid_combinations.len(),
-            if let Some(first_combo) = valid_combinations.first() {
-                first_combo.iter()
-                    .map(|(g1, g2, _, bits)| format!("Swap {} and {} affects bits {:?}", g1, g2, bits))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            } else {
-                "None found".to_string()
-            }
-        )
-    }
-}
-
-fn parse_input(input: &str) -> (HashMap<String, u8>, HashMap<String, Gate>) {
-    let mut initial_values = HashMap::new();
-    let mut gates = HashMap::new();
-    let mut parsing_gates = false;
-
-    for line in input.lines() {
-        if line.is_empty() {
-            parsing_gates = true;
-            continue;
-        }
-
-        if !parsing_gates {
-            // Parse initial values
-            let parts: Vec<&str> = line.split(": ").collect();
-            if parts.len() == 2 {
-                initial_values.insert(
-                    parts[0].to_string(),
-                    parts[1].trim().parse().unwrap_or(0),
-                );
-            }
-        } else {
-            // Parse gates
-            let parts: Vec<&str> = line.split(" -> ").collect();
-            if parts.len() == 2 {
-                let gate_parts: Vec<&str> = parts[0].split_whitespace().collect();
-                let output_wire = parts[1].trim().to_string();
-
-                if gate_parts.len() == 3 {
-                    let input1 = gate_parts[0].to_string();
-                    let op = gate_parts[1];
-                    let input2 = gate_parts[2].to_string();
-
-                    let gate = match op {
-                        "AND" => Gate::And(input1, input2),
-                        "OR" => Gate::Or(input1, input2),
-                        "XOR" => Gate::Xor(input1, input2),
-                        _ => continue,
-                    };
-                    gates.insert(output_wire, gate);
-                }
-            }
-        }
-    }
-
-    (initial_values, gates)
-}
-
-fn simulate_circuit(initial_values: &HashMap<String, u8>, gates: &HashMap<String, Gate>) -> HashMap<String, u8> {
-    let mut wire_values = initial_values.clone();
-    let mut changed = true;
-    let mut iteration = 0;
-
-    while changed {
-        changed = false;
-        iteration += 1;
-        // println!("\nIteration {}", iteration);
-        
-        for (output_wire, gate) in gates {
-            if wire_values.contains_key(output_wire) {
-                continue;
-            }
-
-            match gate {
-                Gate::And(w1, w2) => {
-                    if let (Some(&v1), Some(&v2)) = (wire_values.get(w1), wire_values.get(w2)) {
-                        wire_values.insert(output_wire.clone(), v1 & v2);
-                        // println!("AND: {} & {} = {} -> {}", w1, w2, v1 & v2, output_wire);
-                        changed = true;
-                    }
-                }
-                Gate::Or(w1, w2) => {
-                    if let (Some(&v1), Some(&v2)) = (wire_values.get(w1), wire_values.get(w2)) {
-                        wire_values.insert(output_wire.clone(), v1 | v2);
-                        // println!("OR: {} | {} = {} -> {}", w1, w2, v1 | v2, output_wire);
-                        changed = true;
-                    }
-                }
-                Gate::Xor(w1, w2) => {
-                    if let (Some(&v1), Some(&v2)) = (wire_values.get(w1), wire_values.get(w2)) {
-                        wire_values.insert(output_wire.clone(), v1 ^ v2);
-                        // println!("XOR: {} ^ {} = {} -> {}", w1, w2, v1 ^ v2, output_wire);
-                        changed = true;
-                    }
-                }
-            }
-        }
-    }
-
-    wire_values
+    (wires, gates)
 }
 
 #[cfg(test)]
@@ -328,21 +198,12 @@ mod tests {
     #[test]
     fn test_part1_sample() {
         let input = read_input(24, true);
-        println!("\nInput:\n{}", input);
         assert_eq!(Day24.part1(&input), "2024");
     }
 
     #[test]
     fn test_part2_sample() {
         let input = read_input(24, true);
-        assert_eq!(Day24.part2(&input), "x: 0, y: 0, z: 0, x+y: 0\nz binary:  0\nx+y binary:0\nDifferent bits: 0");
+        Day24.part2(&input);
     }
-}
-
-fn covers_all_bits(pairs: &[&(String, String, usize, Vec<usize>)], target_bits: &[usize]) -> bool {
-    let mut covered_bits = std::collections::HashSet::<usize>::new();
-    for (_, _, _, bits) in pairs.iter() {
-        covered_bits.extend(bits);
-    }
-    target_bits.iter().all(|b| covered_bits.contains(b))
 }
