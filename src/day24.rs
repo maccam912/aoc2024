@@ -165,7 +165,47 @@ impl Solution for Day24 {
         let mut bit_counts: Vec<_> = bit_coverage.iter().collect();
         bit_counts.sort_by_key(|(_, pairs)| pairs.len());
         
-        format!("Original differing bits ({} bits): {:?}\n\nBit coverage:\n{}\n\nFound {} improvements:",
+        // Find combinations of exactly 4 pairs that cover all bits
+        let mut valid_combinations = Vec::new();
+        
+        // Find the bit with fewest fixing pairs
+        if let Some((&hardest_bit, hardest_bit_pairs)) = bit_counts.first() {
+            println!("Bit {} has fewest fixing pairs: {}", hardest_bit, hardest_bit_pairs.len());
+            
+            // Filter improvements to only those that fix the hardest bit
+            let critical_improvements: Vec<_> = improvements.iter()
+                .filter(|(_, _, _, bits)| bits.contains(&hardest_bit))
+                .collect();
+            
+            let remaining_improvements: Vec<_> = improvements.iter()
+                .filter(|(_, _, _, bits)| !bits.contains(&hardest_bit))
+                .collect();
+            
+            println!("Trying {} improvements that fix bit {}", critical_improvements.len(), hardest_bit);
+            
+            // Try combinations where we force one of the critical improvements
+            for &critical_pair in &critical_improvements {
+                for i in 0..remaining_improvements.len() {
+                    for j in (i+1)..remaining_improvements.len() {
+                        for k in (j+1)..remaining_improvements.len() {
+                            let combination = vec![
+                                critical_pair,
+                                remaining_improvements[i],
+                                remaining_improvements[j],
+                                remaining_improvements[k],
+                            ];
+                            if covers_all_bits(&combination, &original_diff_bits) {
+                                valid_combinations.push(combination);
+                                // Optional: break early if we just want one solution
+                                // if valid_combinations.len() > 0 { break; }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        format!("Original differing bits ({} bits): {:?}\n\nBit coverage:\n{}\n\nFound {} improvements\n\nValid 4-pair combinations: {}\nFirst valid combination:\n{}",
             original_diff_bits.len(),
             original_diff_bits,
             bit_counts.iter()
@@ -175,7 +215,16 @@ impl Solution for Day24 {
                 ))
                 .collect::<Vec<_>>()
                 .join("\n"),
-            improvements.len()
+            improvements.len(),
+            valid_combinations.len(),
+            if let Some(first_combo) = valid_combinations.first() {
+                first_combo.iter()
+                    .map(|(g1, g2, _, bits)| format!("Swap {} and {} affects bits {:?}", g1, g2, bits))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            } else {
+                "None found".to_string()
+            }
         )
     }
 }
@@ -288,4 +337,12 @@ mod tests {
         let input = read_input(24, true);
         assert_eq!(Day24.part2(&input), "x: 0, y: 0, z: 0, x+y: 0\nz binary:  0\nx+y binary:0\nDifferent bits: 0");
     }
+}
+
+fn covers_all_bits(pairs: &[&(String, String, usize, Vec<usize>)], target_bits: &[usize]) -> bool {
+    let mut covered_bits = std::collections::HashSet::<usize>::new();
+    for (_, _, _, bits) in pairs.iter() {
+        covered_bits.extend(bits);
+    }
+    target_bits.iter().all(|b| covered_bits.contains(b))
 }
